@@ -1,0 +1,159 @@
+# Parameter file 
+# Material: 2x10^18 p-doped GaAs, Messung: 20120718m21_2e18_Licht
+# 08/14/14
+ 
+T      = 300                          # temperature              [K]
+d      = 0.925                        # tip-sample separation    [nm] 
+
+
+# Set parameters of semiconductor:
+
+SC_Interface = 0
+Epsi_s = 12.9                        # dielectric constant of semiconductor
+Chi    = 4.07                        # electron affinity of semiconductor [eV]
+                                     # See: PSS b 245, 873877, 2008
+m_cb   = 0.063                       # density of states effective mass of e- in conduction band as fraction of me
+m_vb   = 0.662                       # density of states effective mass of h in valence band as fraction of me
+E_g    = 1.42                        # Bandgap of semiconductor  [eV]
+                                     # InN: PSSC 2, 2276 (2005) and JAP 94, 4457 (2003)
+Band_Gap_Type= Direct                # Defines, if we have a direct or indirect band gap
+N_A    = 2e18                        # Acceptor concentration [1/cm^3]
+N_D    = 0 #2e18                           # Donator concentration [1/cm^3]
+E_D    = 1.4142                      # Energy of donor level  [eV] (E_g - 0.0058)
+E_A    = 0.028                       # Energy of acceptor level [eV]
+Inv_V  = true                        # allow inversion with holes in valence band (n-type)
+Inv_C  = true                        # allow inversion with electrons in conduction band (p-type)
+P_x = 0
+P_y = 0
+P_z = 0
+Interface_charge = 0
+Surface_charge = 0
+
+# Set parameters of tip:
+phi_m            = 4.5                # work function of the tip [eV]
+Tip_Radius       = 20.0              # radius of a hyperbolic tip [nm]
+Tip_Apex_Angle   = 45                 # opening angle of the tip 0<Angle<90. Smaller value means sharper tip. [Degree]
+
+
+
+# Set parameters of numerical evaluation:
+
+NodeCount_x         = 64 #128             # Number of grid points in x direction
+NodeCount_y         = 64 #128             # Number of grid points in y direction
+NodeCount_z         = 64 #128             # Number of grid points in z direction (direction normal to 
+                                      # the semiconductors surface)
+
+x_length            = 250.0           # physical length of the system in x direction. [nm]
+y_length            = 250.0           # physical length of the system in y direction. [nm]
+z_length            = 250.0           # physical length of the system in z direction. [nm]
+dx_min              = 0.25             # Minimal step width of the computation grid in x direction. At the borders 
+                                      # of the computation grid the step width will be increased to match the total 
+                                      # grid width. [nm]
+dy_min              = 0.25             # Minimal step width of the computation grid in y direction. At the borders 
+                                      # of the computation grid the step width will be increased to match the total 
+                                      # grid width. [nm]
+dz_min              = 0.25             # Minimal step width of the computation grid in z direction. At the borders 
+                                      # of the computation grid the step width will be increased to match the total 
+                                      # grid width. [nm]
+
+dPhi                = 1e-7            # Accuracy factor for the solution of the poission equation: This 
+                                      # is the maximal change of the potential within one iteration
+omega               = 0.3             # relaxation paramter for over/underrelaxation ]0.2[ 
+scale_tunnelarea    = false           # Defines, if the tunnel current density is multiplied by a constant value of
+                                        100 Squareangstrom (false), or if it is multiplied by Pi*Tip_Radius^2
+
+refinement_steps    = 0               # Defines the number of grid-node refinements. [1..n]
+                                      # Each refinement doubles the number of grid points in each direction.
+                                      # Be carefull: Each refinement step needs eight times (2^3) the memory  
+                                      #              of the previous step!
+
+stepwidth_E    = 0.01                 # Stepwidth in the outer integral in Eq. 2 in [2] in eV
+                                      # Accuracy: 0.04 eV (low quality, may be to large, E_F is near a band edge)
+                                      #           0.01 eV (normal quality)
+
+steps_W        = 200                  # Number of steps for the integration of the inner integral in Eq. 2 in [2]
+                                      # Accuracy: 200 (normal quality)
+
+stepwidth_z    = 0.1                  # width between two lateral points in the band bending iteration in m
+                                      # see also procedure i_tunnel and procedure phi [nm]
+                                      # Standard-value: 0.1 nm
+z_stop         = 200                  # upper limit for z-integration in transmission coefficients.
+                                      # Standard value: 200 nm
+                                      # Large values enhance accuracy of the tunnel currents but take longer
+                                      # to evaluate. 
+
+# Light induced carriers
+ 
+mu_n           = 2400                  # Mobility of electrons [cm^2/Vs]
+mu_p           = 150                  # Mobility of holes [cm^2/Vs]
+P_opt          = 0.000015                # optical power of the laser [W]
+E_ph           = 1.58                 # energy of a photon [eV]
+A_opt          = 150000000            # illuminated area [nm^2] 
+                                      # standard value: 25000 x 25000 nm^2
+alpha          = 1e4                  # absorption coefficient [1/cm]
+tau            = 5e-9                 # minority charrier lifetime [s]
+light_on       = true                 # Switch for turning on the laser
+
+
+# Defining the surface state distribution
+
+E_SS                   = 1.75         # This is the peak position of the gaussian distribution of
+                                      # the surface states. [eV] (relative to the valence band edge)
+E_CNL                  = 0.0          # The charge neutrality level of the surface state distribution
+                                      # relative to the valence band edge. [eV] (relative to the valence band edge)
+FWHM                   = 0.25         # Full-width-half-maximum value of the gaussian distribution of the 
+                                      # surface states. [eV]
+surface_charge_density = 4.4e14       # surface charge density. This is the area enclosed by the gaussian
+                                      # distribution. [1/cm^2]
+                                      # This value is in the range of 10^12 - 10^14 (fully pinned)
+                                      # Set this value to 0, if no surface states are required in the calculation
+
+# Defining the output of the program
+
+V_list          = 0.6,0.7,1.0,1.25,1.5,1.75,2.0,2.5    # Voltage list to be calculated [V]
+
+
+I(V):output     = true                # Output of the tunneling current I(V)
+I(V):filename   = i_tunnel.txt        # Filename for output file of I(V) curve. File is stored in program directory, no subdirectory is specified
+
+BB_central(z):output    = true                # band bending as a function of the distance from the semiconductors surface for each voltage step defined above
+BB_central(z):filename  = bb_V=%.2fV.txt      # Filenames for the band bending output files. Each voltage step produces a new ascii file containing V, E_V(z),
+                                      # E_C(z), E_F, E_F+V. %.2f in the filename will be replaced by the voltage (for more information about the filename
+                                      # see format command in pascal or c language).
+BB(V):output    = true                # band bending as a function of voltage. 
+BB(V):filename  = bb_vs_V.txt         # Filename for the band bending output file. File contains V, E_V(V), E_C(V), E_F + V
+
+EFQ(V):output   = true                # Quasi-Fermi levels and quasi-effective masses as a function of voltage.
+EFQ(V):filename = EFQ_vs_V.txt        # Filename for the Quasi-Fermi level output file
+
+Phi3D:output  = true                  # output of the whole three dimensional phi-array in binary form (for plotting with gnuplot) and in ASCII-Format.
+Phi3D:filename= Phi_V=%.2fV_x=%d      # file extension will be added automatically. (.bin=binary, .txt=ascii) 
+                                      # The first parameter (%.2f) is the voltage given as floating point value,
+                                      # The second parameter (%d) is the x-index of the phi(x,y,z) array and given as integer value.
+Rho3D:output = true                   # output of the whole three dimensional electron and hole concentrations in binary form.
+Rho3D:n_filename= N_V=%.2fV_x=%d
+Rho3D:p_filename= p_V=%.2fV_x=%d
+
+Rho_central(z):output = true
+Rho_central(z):filename = charge_density_V=%.2fV.txt
+
+Interim_solution:Intervall = 5000      # Saves an iterim solution every k-th iteration step to investigate the evolution of the potential and carrier densities.
+                                      # (0 = no output of iterim solution)
+Interim_solution:x         = 32       # Index (integer value) of the plane, that should be stored (from 0 to NodeCount_x-1)
+                                      # Usually: NodeCount_x/2
+Interim_solution:Path = movie_V=%.2f  # Folder name for storing the iterim solution of a spezific voltage. 
+                                      # The first parameter (%.2f) is the voltage given as floating point value
+Interim_solution:n_filename= N_k=%d   # Filename for electron concentration array file 
+                                      # First parameter (%d) is the iteration step (interger value)
+Interim_solution:p_filename= P_k=%d   # Filename for hole concentration array file 
+                                      # First parameter (%d) is the iteration step (interger value)
+Interim_solution:phi_filename= Phi_k=%d   # Filename for phi array file 
+                                      # First parameter (%d) is the iteration step (interger value)
+Interim_solution:ND_filename= ND_k=%d # Filename for concentration of ionized donor array file 
+                                      # First parameter (%d) is the iteration step (interger value)
+Interim_solution:NA_filename= NA_k=%d # Filename for concentration of ionized acceptor array file 
+                                      # First parameter (%d) is the iteration step (interger value)
+Interim_solution:phi_quantum_n_filename= Phi_Quantum_n_k=%d   # Filename for quantum potential of electrons array file 
+                                      # First parameter (%d) is the iteration step (interger value)
+Interim_solution:phi_quantum_p_filename= Phi_Quantum_p_k=%d   # Filename for quantum potential of holes array file 
+                                      # First parameter (%d) is the iteration step (interger value)
