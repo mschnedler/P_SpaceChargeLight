@@ -2,7 +2,7 @@ unit U_Constants;
 
 interface
 const
-       ProgramVersion = '01/09/2020 (LaserLight V23 Quantum Polar)';
+       ProgramVersion = '03/12/2020 (LaserLight V23 Quantum Polar)';
        {$IFDEF FPC}
         TargetOS = {$I %FPCTARGETOS%};
        {$ELSE}

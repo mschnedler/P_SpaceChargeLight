@@ -928,11 +928,8 @@ var
 
         pzp1:=pz_array[z+1];
         pzm1:=pz_array[z-1];
-        //if sc=2 then
-         //   sc:=2;
-        P_diff:=e*(SpaceChargeArray[x,y,z+1].Polarisation.z-SpaceChargeArray[x,y,z].Polarisation.z);
 
- 
+        P_diff:=-e*(SpaceChargeArray[x,y,z].Polarisation.z-SpaceChargeArray[x,y,z-1].Polarisation.z);
 
         PartZ:=   ( Semiconductors[SC].Epsi_semi*(Phi(x,y,z+1)-aPhi)/(pzp1-pz)
                    -Epsi_vac*(aPhi-(Phi(x,y,z-1)-E_offset))/(pz-pzm1)
@@ -1069,7 +1066,7 @@ var
         pxp1:=px_array[x+1];
         pxm1:=px_array[x-1];
 
-        P_diff:=e*(SpaceChargeArray[x,y,z].Polarisation.x-SpaceChargeArray[x-1,y,z].Polarisation.x);
+        P_diff:=-e*(SpaceChargeArray[x,y,z].Polarisation.x-SpaceChargeArray[x-1,y,z].Polarisation.x);
 
         Epsi1:= Semiconductors[SpaceChargeArray[x+1,y,z].SCIndex].Epsi_semi;
         Epsi2:= Semiconductors[SpaceChargeArray[x-1,y,z].SCIndex].Epsi_semi;
