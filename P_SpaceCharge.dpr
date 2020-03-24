@@ -359,7 +359,8 @@ var
               Rho_central_output:=strtobool(ParameterList[i]);
               inc(i);
               Rho_central_filename:=ParameterList[i];
-              inc(i);
+
+              inc(i);
               Interim_solution_Intervall:=strtoint(ParameterList[i]);
               inc(i);
               Interim_solution_x:=strtoint(ParameterList[i]);
@@ -797,12 +798,14 @@ var
       begin
          E_Fqn:=GetE_Fqn2(SC,Phi,n);
          eta_n:=(E_Fqn-(Semiconductors[SC].E_g-Phi))/(k*T);
+         if eta_n<-40 then
+           begin
+             result:=1;
+             exit;
+           end;
          a:=GetFromFjList(eta_n*k*T);
          b:=exp(-eta_n);
-         if (a=0) or (b=0) then
-            result:=1
-          else
-            result:=a*b*2/sqrt(Pi);
+         result:=a*b*2/sqrt(Pi);
       end;
 
       function Gamma_p(SC:integer; Phi:double; p:double):double;
@@ -812,12 +815,14 @@ var
       begin
          E_Fqp:=GetE_Fqp2(SC,Phi,p);
          eta_p:=((-Phi)-E_Fqp)/(k*T);
+         if eta_p<-40 then
+           begin
+             result:=1;
+             exit;
+           end;
          a:=GetFromFjList(eta_p*k*T);
          b:=exp(-eta_p);
-         if (a=0) or (b=0) then
-            result:=1
-          else
-            result:=a*b*2/sqrt(Pi);
+         result:=a*b*2/sqrt(Pi);
       end;
 
       function Phi_Gamma_n(x,y,z:integer):double;
@@ -2809,11 +2814,16 @@ var
                                           -(Semiconductors[SCbelowTip].E_g
                                             -Semiconductors[SCbelowTip].E_f
                                             +Semiconductors[SCbelowTip].Chi);
-              Semiconductors[i].Discontinuity_VB:= (Semiconductors[SCbelowTip].Chi+Semiconductors[SCbelowTip].E_g)
-                                                  -(Semiconductors[i].Chi+Semiconductors[i].E_g);
-              Semiconductors[i].Discontinuity_CB:= Semiconductors[SCbelowTip].Chi-Semiconductors[i].Chi;
-              Phi_max:=max(phi_max,abs(Semiconductors[i].E_offset));
-            end;
+
+              Semiconductors[i].Discontinuity_VB:= (Semiconductors[SCbelowTip].Chi+Semiconductors[SCbelowTip].E_g)
+
+                                                  -(Semiconductors[i].Chi+Semiconductors[i].E_g);
+
+              Semiconductors[i].Discontinuity_CB:= Semiconductors[SCbelowTip].Chi-Semiconductors[i].Chi;
+
+              Phi_max:=max(phi_max,abs(Semiconductors[i].E_offset));
+
+            end;
 
 
       end;
