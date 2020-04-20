@@ -2,7 +2,7 @@ unit U_Constants;
 
 interface
 const
-       ProgramVersion = '03/12/2020 (LaserLight V23 Quantum Polar)';
+       ProgramVersion = '04/08/2020 (LaserLight V23 Quantum Polar)';
        {$IFDEF FPC}
         TargetOS = {$I %FPCTARGETOS%};
        {$ELSE}
@@ -17,7 +17,7 @@ const
         {$ENDIF}
        {$ENDIF}
 
-       Integration_Accuracy=1e-15;
+       Integration_Accuracy=1e-12;
 
        kb     = 1.38064852e-23;      // Boltzmann constant in J/K
        k      = 8.61733035e-05;        // Bolzmann constant in eV/K

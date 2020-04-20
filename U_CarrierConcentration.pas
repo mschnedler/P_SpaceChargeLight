@@ -57,7 +57,7 @@ implementation
                if abs(j-3/2)<0.0001 then result:=result*3/2;
              end
            else
-             result:=integrate(F_j_int,fp,0,20+eta,1e-10);  //IMPORTANT: IF THERE ARE
+             result:=integrate(F_j_int,fp,0,20+eta,Integration_Accuracy);  //IMPORTANT: IF THERE ARE
          end;                                               //CONVERGENCE PROBLEMS IN THE
                                                             //POTENTIALDETERMINATION: SET
                                                             //THE UPPER LIMIT 20+eta TO HIGHER

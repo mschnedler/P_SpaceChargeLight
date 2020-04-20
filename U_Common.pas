@@ -9,7 +9,7 @@ uses SysUtils, Math;
 
 const
       GoldenSection= 0.381966;
-
+      Max_Int_Rekursion=200;
 type
        TVec= record
          x,y,z:double;
@@ -91,13 +91,15 @@ type
           Inv_V:       boolean;      // allow inversion with holes in valence band (n-type)
           Inv_C:       boolean;      // allow inversion with electrons in conduction band (p-type)
           BandGapType: TBandGapType; // Defines, whether we are dealing with an direct or indirect band gap
-          Discontinuity_VB: double;  // Defines the valence band discontinuity relativ to Semiconductor 0.
+
+          Discontinuity_VB: double;  // Defines the valence band discontinuity relativ to Semiconductor 0.
           Discontinuity_CB: double;  // Defines the conduction band discontinuity relativ to Semiconductor 0.
           Polarisation: TVec;        // Defines the Polarisation field of the semiconductor [1/nm^2]
        end;
 
        TSpaceChargeArray= array of array of array of TSpaceChargePoint;
-              function Integrate2(FunctionToIntegrate:TCommonFunction; Parameters:TFunctionParameters; From:double; Too:double;dx:double):double;
+
+       function Integrate2(FunctionToIntegrate:TCommonFunction; Parameters:TFunctionParameters; From:double; Too:double;dx:double):double;
        function  Integrate(f:TCommonFunction; Parameters:TFunctionParameters; a:double; b:double; eps:double):double;
        function GoldenSectionInteration(f:TCommonFunction; Parameters:TFunctionParameters; var a:double; var b:double; eps:double):integer;
        procedure Output(s:string);
@@ -182,6 +184,15 @@ implementation
          DelStrAry[n-1]:=Str;
        end;
 
+       // *********************************************************************
+       // Lyness's Modified Adaptive Simpson's method for integration
+       // Journal of the ACM 16 483-495 (1969)
+       // DOI: 10.1145/321526.321537
+       // A numerical quadrature method that recursively bisects the interval
+       // until the precision is high enough
+       // See also:
+       // rosettacode.org/wiki/Numerical_integration/Adaptive_Simpson%27s_method
+       // **********************************************************************
 
        function Quad_Simpsons_mem(f:TCommonFunction; Parameters:TFunctionParameters; a,b,fa, fb: double; var m,fm:double): double;
        begin
@@ -199,14 +210,42 @@ implementation
          right:=Quad_Simpsons_mem(f,parameters, m, b, fm, fb,rm,frm);
          Delta:=left + right - whole;
 
-         if (abs(Delta)<=15* eps) and (recursion_level>2) or ((left+right<>0) and IsZero(Delta/(left+right))) then
-             result:=left + right + delta/15
+         if ((abs(Delta)<=15* eps) and (recursion_level>2)) then
+            begin
+              result:=left + right + delta/15
+            end
+         else if recursion_level>Max_Int_Rekursion then
+            begin
+              result:=left + right + delta/15;
+              //output('*** WARNING: Max. rekursion depth reached in Quad_Asr (adaptive simpson integration).');
+            end
+         else if (eps/2=eps) or (a=lm)then
+            begin
+              result:=left + right + delta/15;
+              //output('*** WARNING: Interval refinement reached machines precision in Quad_Asr (adaptive simpson integration).');
+            end
          else
            begin
             r1:= Quad_Asr(f,parameters,recursion_level+1,a,m,fa,fm,eps/2,left,lm,flm);
             r2:= Quad_Asr(f,parameters,recursion_level+1,m,b,fm,fb,eps/2,right,rm,frm);
             result:=r1+r2;
            end;
+       end;
+
+       function Integrate(f:TCommonFunction; Parameters:TFunctionParameters; a:double; b:double; eps:double):double;
+       var fa,fb:Double;
+           res,fm,whole: double;
+           m:double;
+       begin
+         if (a=b) then
+          begin
+            result:=0;
+            exit;
+          end;
+         fa:=f(a,parameters);
+         fb:=f(b,parameters);
+         whole:= Quad_Simpsons_mem(f,parameters,a,b,fa,fb,m,fm);
+         result:=Quad_Asr(f,parameters,0,a,b,fa,fb,eps,whole,m,fm);
        end;
 
        function Integrate2(FunctionToIntegrate:TCommonFunction; Parameters:TFunctionParameters; From:double; Too:double;dx:double):double;
@@ -238,16 +277,7 @@ implementation
 
 
 
-       function Integrate(f:TCommonFunction; Parameters:TFunctionParameters; a:double; b:double; eps:double):double;
-       var fa,fb:Double;
-           res,fm,whole: double;
-           m:double;
-       begin
-         fa:=f(a,parameters);
-         fb:=f(b,parameters);
-         whole:= Quad_Simpsons_mem(f,parameters,a,b,fa,fb,m,fm);
-         result:=Quad_Asr(f,parameters,0,a,b,fa,fb,eps,whole,m,fm);
-       end;
+
 
        function GoldenSectionInteration(f:TCommonFunction; Parameters:TFunctionParameters; var a:double; var b:double; eps:double):integer;
        var Tau:double;

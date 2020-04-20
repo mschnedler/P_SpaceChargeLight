@@ -59,6 +59,7 @@ implementation
        function Sqrt_E_cb_minus_W(z:double; Parameters: TFunctionParameters):double;
        var Re:double;
            num,i:integer;
+           iz:double;
            dz:double;
            W:double;
            phi_x:double;
@@ -66,8 +67,17 @@ implementation
          W:=Parameters[0];
          dz:=Parameters[1];
          num:=trunc(Parameters[2]);
-         i:=min(trunc(z/dz),num-1);
-         phi_x:= Parameters[i+3];
+
+         //Linear interpolation of the potential for smooth integration
+         iz:=z/dz;
+         i:=trunc(iz);
+         if i<num-1 then
+           begin
+             iz:=iz-i;
+             phi_x:= Parameters[i+3]*(1-iz)+Parameters[(i+1)+3]*iz;
+           end
+         else
+           phi_x:=Parameters[num-1+3];
 
          // if holes fill the valence band above E_F then the barrier for
          // electrons tunneling thru SCR (and valence band) into conduction band
@@ -134,7 +144,7 @@ implementation
        function Sqrt_W_minus_E_vb(z:double; Parameters: TFunctionParameters):double;
        var Re:double;
            num,i:integer;
-           dz:double;
+           dz,iz:double;
            W:double;
            phi_x:double;
            E:double;
@@ -142,9 +152,17 @@ implementation
          W:=Parameters[0];
          dz:=Parameters[1];
          num:=trunc(Parameters[2]);
-         i:=min(trunc(z/dz),num-1);
-         phi_x:= Parameters[i+3];
 
+         //Linear interpolation of the potential for smooth integration
+         iz:=z/dz;
+         i:=trunc(iz);
+         if i<num-1 then
+           begin
+             iz:=iz-i;
+             phi_x:= Parameters[i+3]*(1-iz)+Parameters[(i+1)+3]*iz;
+           end
+         else
+           phi_x:=Parameters[num-1+3];
 
          E:=SC.E_G+Phi_x;
          // if electrons fill the conduction band up to E_F then barrier for
