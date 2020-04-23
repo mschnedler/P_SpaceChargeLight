@@ -17,17 +17,24 @@ The program P_SpaceCharge needs the input file "parameters.txt" to be present in
 **Physical Background and Theory**
 
 The theoretical models can be found in the references. Additionally, a precise description of the models, finite-difference iteration scemes, and interface- and boundary conditions is available as PDF (taken from my PhD-Thesis). Special attention should be paid to the book of Prof. S. Selberherr[6] for the derivation of finite-difference and finite-element equations for semiconductors. Especially the implementation of the boundary conditions is often done in an erroneous way, leading to increased numiercal errors at the boundaries. Due to very small tip-radii and thus small tip-induced quantum dots, the classical Drift-and-Diffusion model that is used to evaluate the carrier current densities may overestimate the carrier densities and thus one has to take into account a quantum correction: P_SpaceChargeLight derives additional repulsive potentials for holes and electrons to account for the quantum compressibility[7]. The additional potentials are then used as a perturbation in the continuity equations.
-Output files
+
+**Output files**
 
 P_SpaceChargeLight is able to generate a variety of different output files like potential distributions, electron- and hole distributions, band bending along the central axis, Quasi-Fermi levels, and tunnel currents. It depends on the settings within the parameter.txt file, which kind of data is stored. (see the description of the parameter file for further information.) Each output of data can be switched on or off, and individual filenames can be assigned. A detailed description of the individual files can be found here.
 
 **References**
 
 
-[1] M. Schnedler, V. Portz, P. H. Weidlich, R. E. Dunin-Borkowski, and Ph. Ebert, Quantitative description of photoexcited scanning tunneling spectroscopy and its application to the GaAs(110) surface, Phys. Rev. B 91, 235305
-[2] J. Bardeen, Tunnelling from a many-particle point of view, Phys. Rev. Lett. 6,  57-59
-[3] W. A. Harrison, Tunneling from an Independent-Particle Point of View, Phys. Rev. 123, 85
-[4] J. Bono and R. H. Good, Theoretical discussion of the scanning tunneling microscope applied to a semiconductor surface, Surf. Sci. 175, 415-420
-[5] R. M. Feenstra and J. A. Stroscio, Tunneling spectroscopy of the GaAs(110) surface, J. Vac. Sci. Technol. B 5, 923-929
-[6] S. Selberherr, Analysis and Simulation of Semiconductor Devices, Springer Vienna-New York, ISBN 978-3-7091-8754-8, 1984
-[7] N. Rowsey, R. P. Muller, R. P. Young, CSRI Summer Proceedings 2009 (Computer Science Research Institute at Sandia National Laboratories, Albuquerque, New Mexico, USA)
+[1] M. Schnedler, V. Portz, P. H. Weidlich, R. E. Dunin-Borkowski, and Ph. Ebert, *Quantitative description of photoexcited scanning tunneling spectroscopy and its application to the GaAs(110) surface*, Phys. Rev. B **91**, 235305
+
+[2] J. Bardeen, *Tunnelling from a many-particle point of view*, Phys. Rev. Lett. **6**,  57-59
+
+[3] W. A. Harrison, *Tunneling from an Independent-Particle Point of View*, Phys. Rev. **123**, 85
+
+[4] J. Bono and R. H. Good, *Theoretical discussion of the scanning tunneling microscope applied to a semiconductor surface*, Surf. Sci. **175**, 415-420
+
+[5] R. M. Feenstra and J. A. Stroscio, *Tunneling spectroscopy of the GaAs(110) surface*, J. Vac. Sci. Technol. B **5**, 923-929
+
+[6] S. Selberherr, *Analysis and Simulation of Semiconductor Devices*, Springer Vienna-New York, ISBN 978-3-7091-8754-8, 1984
+
+[7] N. Rowsey, R. P. Muller, R. P. Young, *3D TCAD Modeling of Candidate Structures for the Silicon Qubit*, CSRI Summer Proceedings 2009 (Computer Science Research Institute at Sandia National Laboratories, Albuquerque, New Mexico, USA)
