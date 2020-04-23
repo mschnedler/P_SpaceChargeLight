@@ -23,10 +23,11 @@ P_SpaceChargeLight is able to generate a variety of different output files like 
 
 **References**
 
+
 [1] M. Schnedler, V. Portz, P. H. Weidlich, R. E. Dunin-Borkowski, and Ph. Ebert, Quantitative description of photoexcited scanning tunneling spectroscopy and its application to the GaAs(110) surface, Phys. Rev. B 91, 235305
 [2] J. Bardeen, Tunnelling from a many-particle point of view, Phys. Rev. Lett. 6,  57-59
 [3] W. A. Harrison, Tunneling from an Independent-Particle Point of View, Phys. Rev. 123, 85
 [4] J. Bono and R. H. Good, Theoretical discussion of the scanning tunneling microscope applied to a semiconductor surface, Surf. Sci. 175, 415-420
 [5] R. M. Feenstra and J. A. Stroscio, Tunneling spectroscopy of the GaAs(110) surface, J. Vac. Sci. Technol. B 5, 923-929
 [6] S. Selberherr, Analysis and Simulation of Semiconductor Devices, Springer Vienna-New York, ISBN 978-3-7091-8754-8, 1984
-[7] N. Rowsey, R. P. Muller, R. P. Young, CSRI Summer Proceedings 2009 (Computer Science Research Institute at Sandia National Laboratories, Albuquerque, New Mexico, USA). 
+[7] N. Rowsey, R. P. Muller, R. P. Young, CSRI Summer Proceedings 2009 (Computer Science Research Institute at Sandia National Laboratories, Albuquerque, New Mexico, USA)
