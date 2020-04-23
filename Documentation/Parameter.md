@@ -54,7 +54,7 @@
 | stepwidth_z | eV | Stepwidth in the outer integral in Eq. 2 in [2] - Accuracy: 0.04 eV (low quality, may be to large, E_F is near a band edge), 0.01 eV (normal quality). |
 | z_stop | nm | Upper limit for z-integration in transmission coefficients. Standard value: 200 nm, large values enhance accuracy of the tunnel currents but take longer. |
 | omega | |Relaxation parameter for under-relaxation of the Newton iteration method. For semiconductors, values around 0.2 are suggested by Selberherr[1]. Decrease this value, if the solution diverges. |
-| scale_tunnelarea | Scale the tunnel area (accepted values: true/false) |
+| scale_tunnelarea | | Scale the tunnel area (accepted values: true/false) |
 
 ##  Output Parameter:
 | Parameter | Unit | Explanation |
