@@ -1,4 +1,4 @@
-# GUI for the Simulation *P_SpaceChargeLight*
+# *P_SpaceChargeLight*
 
 **Introduction**
 
