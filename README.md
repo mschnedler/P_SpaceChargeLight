@@ -26,9 +26,9 @@ P_SpaceChargeLight is able to generate a variety of different output files like 
 
 If you use P_SpaceChargeLight in a scientific publication, please cite the following DOIs:
 
-[10.1103/PhysRevB.91.235305](https://doi.org/10.1103/PhysRevB.91.235305)
++ [10.1103/PhysRevB.91.235305](https://doi.org/10.1103/PhysRevB.91.235305)
 
-[10.1103/PhysRevB.93.195444](https://doi.org/10.1103/PhysRevB.93.195444)
++ [10.1103/PhysRevB.93.195444](https://doi.org/10.1103/PhysRevB.93.195444)
 
 **References**
 
