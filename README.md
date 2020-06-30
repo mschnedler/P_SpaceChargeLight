@@ -22,11 +22,12 @@ The theoretical models can be found in the references. Additionally, a precise d
 
 P_SpaceChargeLight is able to generate a variety of different output files like potential distributions, electron- and hole distributions, band bending along the central axis, Quasi-Fermi levels, and tunnel currents. It depends on the settings within the parameter.txt file, which kind of data is stored. (see the description of the parameter file for further information.) Each output of data can be switched on or off, and individual filenames can be assigned. A detailed description of the individual files can be found here.
 
-** Citing **
+**Citing**
 
 If you use P_SpaceChargeLight in a scientific publication, please cite the following DOIs:
 
 [10.1103/PhysRevB.91.235305](https://doi.org/10.1103/PhysRevB.91.235305)
+
 [10.1103/PhysRevB.93.195444](https://doi.org/10.1103/PhysRevB.93.195444)
 
 **References**
