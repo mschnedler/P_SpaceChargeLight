@@ -411,7 +411,7 @@ implementation
           n:=length(pz_array);
 
           i:=0;
-          while (i<n-1) and (Phi_central[i].Material=mTip) do
+          while (i<n-1) and (Phi_central[i].Material=mMetal) do
            inc(i);
           z0:=pz_array[i-1];
 

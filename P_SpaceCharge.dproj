@@ -205,6 +205,7 @@
         <DCCReference Include="U_Common.pas"/>
         <DCCReference Include="U_CarrierConcentration.pas"/>
         <DCCReference Include="U_TunnelCurrent_2.pas"/>
+        <DCCReference Include="U_FDMSolver.pas"/>
         <BuildConfiguration Include="Release">
             <Key>Cfg_2</Key>
             <CfgParent>Base</CfgParent>
@@ -272,6 +273,12 @@
                 </DeployFile>
                 <DeployFile LocalName="$(BDS)\Redist\iossimulator\libpcre.dylib" Class="DependencyModule">
                     <Platform Name="iOSSimulator">
+                        <Overwrite>true</Overwrite>
+                    </Platform>
+                </DeployFile>
+                <DeployFile LocalName="Win64\Release\P_SpaceCharge.exe" Configuration="Release" Class="ProjectOutput">
+                    <Platform Name="Win64">
+                        <RemoteName>P_SpaceCharge.exe</RemoteName>
                         <Overwrite>true</Overwrite>
                     </Platform>
                 </DeployFile>

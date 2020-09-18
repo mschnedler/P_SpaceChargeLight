@@ -20,7 +20,7 @@ type
        TFunctionParameters =  array of double;
        TCommonFunction     =  function(x: double; Parameters:TFunctionParameters): double;
 
-       TMaterial = (mTip, mSC, mVac);
+       TMaterial = (mMetal, mSC, mVac);
 
        TBandGapType = (bgtDirect, bgtIndirect);
 
@@ -33,8 +33,12 @@ type
           p: double;
           dPhi,dn,dp: double;
           dF1dPhi,dF2dn,dF3dp: double;
-          Polarisation: TVec;         //Polarisation in 1/nm^2 (devided by e)
-          SCIndex: byte;
+          Polarisation: TVec;          //Polarisation in 1/nm^2 (devided by e)
+          SCIndex: byte;               //Semiconductor index
+          SurfX,SurfY,SurfZ:boolean ;  //surface indicator
+          IntX,IntY,IntZ:boolean;      //intface indicator
+          SurfCount,IntCount: integer; //surface and interface Count
+          divP: double;                //constant value of divergence P in 1/nm^3 (devided by e)
        end;
 
        TRhoList=record
