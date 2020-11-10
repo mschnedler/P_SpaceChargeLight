@@ -284,6 +284,11 @@ implementation
          begin
            result:= Semiconductors[SC].E_G/2 +
                     0.75*kb*T*ln(Semiconductors[SC].m_vb/Semiconductors[SC].m_cb)/eVToJ;
+           output(format('Fermi level found at E_F - E_V = %.5e eV.\n',[result]));
+           output(format('Electron concentration = %.5e nm^-3',[n(result,0,true,SC)]));
+           output(format('Hole concentration = %.5e nm^-3',[p(result,0,true,SC)]));
+           output(format('Ionized donor concentration = %.5e nm^-3',[ND_ionized(result,0,SC)]));
+           output(format('Ionized acceptor concentration = %.5e nm^-3\n',[NA_ionized(result,0,SC)]));
            exit;
          end;
 
@@ -306,16 +311,20 @@ implementation
                begin //Semiconductors[SC].N_A=Semiconductors[SC].N_D
                  result:=(Semiconductors[SC].E_D+Semiconductors[SC].E_A)/2;
                  output(format('Fermi level found at E_F - E_V = %.5e eV.\n',[result]));
+                 output(format('Electron concentration = %.5e nm^-3',[n(result,0,true,SC)]));
+                 output(format('Hole concentration = %.5e nm^-3',[p(result,0,true,SC)]));
+                 output(format('Ionized donor concentration = %.5e nm^-3',[ND_ionized(result,0,SC)]));
+                 output(format('Ionized acceptor concentration = %.5e nm^-3\n',[NA_ionized(result,0,SC)]));
                  exit;
                end;
            end
          else
            begin //T>0K
              //Estimation of E_F:
-             E_F_max:=-0.1;
+             E_F_max:=-0.3;
              r_max:=abs(rho(E_F_max,0,true,true,SC));
-             dE:=(Semiconductors[SC].E_G+0.2)/1000;
-             for i := 0 to 999 do
+             dE:=(Semiconductors[SC].E_G+0.6)/5000;
+             for i := 0 to 4999 do
                begin
                  E_F_max:=E_F_max+dE;
                  curr_r:=abs(rho(E_F_max,0,true,true,SC));
@@ -338,6 +347,10 @@ implementation
          Num_Iter:= GoldenSectionInteration(rho_GS,param, E_F_min, E_F_max,Precision);
          result:=(E_F_min+E_F_max)/2;
          output(format('Fermi level found at E_F - E_V = %.5e eV with %d iterations.\n',[result,Num_Iter]));
+         output(format('Electron concentration = %.5e nm^-3',[n(result,0,true,SC)]));
+         output(format('Hole concentration = %.5e nm^-3',[p(result,0,true,SC)]));
+         output(format('Ionized donor concentration = %.5e nm^-3',[ND_ionized(result,0,SC)]));
+         output(format('Ionized acceptor concentration = %.5e nm^-3\n',[NA_ionized(result,0,SC)]));
 
        end;
 
