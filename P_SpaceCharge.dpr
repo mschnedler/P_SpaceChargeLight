@@ -37,7 +37,7 @@ var
        Ignore_1D_estimation:                  boolean;   // Switch defining, whether there should be a warning, if the
                                                          // lateral extension of 1D estimation of the band bending is larger
                                                          // the size of the grid.
-
+       Quiet:                            boolean;        // Flag indicating, if user inputs are allowed
        // Bibliography
        //  [1] Seiwatz and Green, J. Appl. Phys. 29 (7), 1958
        //  [2] Selberherr, "Analysis and Simulation of Semiconductor Devices",
@@ -688,7 +688,7 @@ var
               output(format('\n1D estimation of depletion region of semiconductor '+inttostr(i)+': %.5f nm\n',[Calc_1D_Estimation(max(1,abs(Voltage)),i)]));
 
             for i:=0 to Semiconductor_Count-1 do
-              if (not Ignore_1D_estimation) and (Calc_1D_Estimation(max(1,abs(Voltage)),i)>z_length/2) then
+              if (not Ignore_1D_estimation) and (not Quiet) and (Calc_1D_Estimation(max(1,abs(Voltage)),i)>z_length/2) then
               begin
                 output('*** WARNING: physical z-length in computation is smaller than the 1D estimation.\nThis may result in a false solution of the poisson equation.\n\nContinue anyway [(y)es| (n)o| (a)lways yes]?');
                 readln(a);
@@ -1324,6 +1324,7 @@ var
         n_max,p_max,phi_max:double;
         SCbelowTip:integer;
         PhiScale_SC:double;
+
 begin
 
         try
@@ -1340,12 +1341,16 @@ begin
           FormatSettings.Decimalseparator := '.';
           Ignore_1D_estimation := false;
 
+          Quiet:= (UpperCase(ParamStr(1))='-Q');
+
           if not ReadParameterFile('parameters.txt') then
           begin
             output('\nPress return to exit program.');
-            readln;
+            if not Quiet then readln;
             exit;
           end;
+
+
 
 
           Initialize_Semiconductors;
@@ -1365,7 +1370,7 @@ begin
           if NumVoltage=0 then
           begin
             output('\nNo voltage point to calculate. Program Done.\nPress return to exit program.');
-            readln;
+            if not Quiet then readln;
             exit;
           end;
 
@@ -1502,12 +1507,12 @@ begin
             end;
 
             output('\n\nProgram done.');
-            readln;
+            if not Quiet then readln;
         except
           on E: Exception do
             begin
               Writeln(E.ClassName, ': ', E.Message);
-              readln;
+              if not Quiet then readln;
             end;
         end;
 end.
