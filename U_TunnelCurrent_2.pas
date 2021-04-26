@@ -552,10 +552,14 @@ implementation
          dz_vac:=d/(num_vac-1);
          setlength(Parameters,num_sc+num_vac+6);
          lambda:= e*e*ln(2)/(8*Pi*epsi_0*d*1e-9);
-         for i := 0 to num_vac-1 do
+
+         Parameters[num_sc+6]:= -1e10;
+         Parameters[num_sc+6+num_vac-1]:= -1e10;
+
+         for i := 1 to num_vac-2 do
            begin
              z:=i*dz_vac;
-             Pot_mirror:= (1.15/2*lambda*d*d)/(z*(d-z)+1e-20)/eVToJ;            //+1e-20 to avoid division by zero
+             Pot_mirror:= (1.15/2*lambda*d*d)/(z*(d-z))/eVToJ;
              Parameters[num_sc+6+i]:=InterpolateVTrap(Phi_central,pz_array,z)+SC.E_g+SC.Chi-Pot_mirror;
            end;
 
