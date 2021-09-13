@@ -12,7 +12,7 @@ This software is freely provided for the use by any researcher. Users are encour
 
 P_SpaceChargeLight can be downloaded as source-code and precompiled executable for Microsoft Windows 32/64 Bit, Linux, and MacOS. The source-code is written in the Pascal language. It can be compiled with the freely available Free-Pascal-Compiler (FPC) and also with the commercially available Embarcadero Delphi/ RAD Studio environment.
 
-The program P_SpaceCharge needs the input file "parameters.txt" to be present in the execution directory. This ASCII-File contains all relevant information and physical parameters of the semiconductor (bulk and surface), the tip, and the simulation grid. A precise description of all parameters in the "parameters.txt" file is given [here](Parameter.md).
+The program P_SpaceCharge needs the input file "parameters.txt" to be present in the execution directory. This ASCII-File contains all relevant information and physical parameters of the semiconductor (bulk and surface), the tip, and the simulation grid. A precise description of all parameters in the "parameters.txt" file is given [here](Documentation/Parameter.md).
 
 **Physical Background and Theory**
 
