@@ -1089,7 +1089,7 @@ var
       begin
 
         ms:=TMemoryStream.create;
-        i:=NodeCount_y;
+        i:=NodeCount_x;
         ms.write(i,sizeof(i));
 
         for x:=0 to NodeCount_x-1 do
@@ -1127,7 +1127,7 @@ var
         if SwapPhi then f:=-1 else f:=1;
 
         ms:=TMemoryStream.create;
-        i:=NodeCount_y;
+        i:=NodeCount_x;
         ms.write(i,sizeof(i));
 
         for x:=0 to NodeCount_x-1 do
@@ -1165,7 +1165,7 @@ var
         if SwapPhi then f:=-1 else f:=1;
 
         ms:=TMemoryStream.create;
-        i:=NodeCount_y;
+        i:=NodeCount_x;
         ms.write(i,sizeof(i));
 
         for x:=0 to NodeCount_x-1 do
@@ -1204,7 +1204,7 @@ var
       begin
 
         ms:=TMemoryStream.create;
-        i:=NodeCount_y;
+        i:=NodeCount_x;
         ms.write(i,sizeof(i));
 
         for x:=0 to NodeCount_x-1 do
