@@ -959,7 +959,8 @@ var
                  ms.write(s,sizeof(s));
                 end;
           end;
-
+        if not DirectoryExists('.\'+ExtractFilePath(filename)) then
+             ForceDirectories('.\'+ExtractFilePath(filename));
         ms.savetofile(filename);
         freeandnil(ms);
       end;
@@ -1003,6 +1004,8 @@ var
                 end;
           end;
 
+        if not DirectoryExists('.\'+ExtractFilePath(filename)) then
+             ForceDirectories('.\'+ExtractFilePath(filename));
         ms.savetofile(filename);
         freeandnil(ms);
       end;
@@ -1040,6 +1043,8 @@ var
                 end;
           end;
 
+        if not DirectoryExists('.\'+ExtractFilePath(filename)) then
+             ForceDirectories('.\'+ExtractFilePath(filename));
         ms.savetofile(filename);
         freeandnil(ms);
       end;
@@ -1051,6 +1056,8 @@ var
           x,z:integer;
           px,py,pz:double;
       begin
+            if not DirectoryExists('.\'+ExtractFilePath(filename)) then
+                 ForceDirectories('.\'+ExtractFilePath(filename));
             assignfile(tf,filename);
             rewrite(tf);
 
@@ -1087,7 +1094,6 @@ var
           s,i:single;
           d:double;
       begin
-
         ms:=TMemoryStream.create;
         i:=NodeCount_x;
         ms.write(i,sizeof(i));
@@ -1112,6 +1118,8 @@ var
                 end;
           end;
 
+        if not DirectoryExists('.\'+ExtractFilePath(filename)) then
+            ForceDirectories('.\'+ExtractFilePath(filename));
         ms.savetofile(filename);
         freeandnil(ms);
 
@@ -1150,6 +1158,8 @@ var
                 end;
           end;
 
+        if not DirectoryExists('.\'+ExtractFilePath(filename)) then
+             ForceDirectories('.\'+ExtractFilePath(filename));
         ms.savetofile(filename);
         freeandnil(ms);
 
@@ -1188,6 +1198,9 @@ var
                 end;
           end;
 
+
+        if not DirectoryExists('.\'+ExtractFilePath(filename)) then
+             ForceDirectories('.\'+ExtractFilePath(filename));
         ms.savetofile(filename);
         freeandnil(ms);
 
@@ -1227,6 +1240,8 @@ var
                 end;
           end;
 
+        if not DirectoryExists('.\'+ExtractFilePath(filename)) then
+             ForceDirectories('.\'+ExtractFilePath(filename));
         ms.savetofile(filename);
         freeandnil(ms);
 
@@ -1237,6 +1252,8 @@ var
       var tf2:textfile;
           SC,i:integer;
       begin
+             if not DirectoryExists('.\'+ExtractFilePath(filename)) then
+                   ForceDirectories('.\'+ExtractFilePath(filename));
              SC:=GetSemiconductorBelowTipApex;
              output('\nSaving central phi(z) to file: '+format(BB_z_filename,[Voltage])+'.');
              assignfile(tf2,format(BB_z_filename,[Voltage]));
@@ -1254,6 +1271,8 @@ var
       var tf2:textfile;
           i:integer;
       begin
+             if not DirectoryExists('.\'+ExtractFilePath(filename)) then
+                   ForceDirectories('.\'+ExtractFilePath(filename));
              output('\nSaving central n(z) and p(z) to file: '+filename+'.');
              assignfile(tf2,filename);
              rewrite(tf2);
