@@ -533,19 +533,19 @@ var
       var x,y,z:integer;
       begin
         result:=true;
-        if ceil(log2(x_length/2/dx_min))>NodeCount_x div 2 then
+        if NodeCount_x < 2*ceil((3*log2((x_length/(6*dx_min)+1)))) then
         begin
           output('Error: dx_min is set too small/ x_length is set too large.');
           result:=false;
           exit;
         end;
-        if ceil(log2(y_length/2/dy_min))>NodeCount_y div 2 then
+        if NodeCount_y < 2*ceil((3*log2((y_length/(6*dy_min)+1)))) then
         begin
           output('Error: dy_min is set too small/ y_length is set too large.');
           result:=false;
           exit;
         end;
-        if ceil(log2(z_length/2/dz_min))>NodeCount_z div 2 then
+        if NodeCount_z < 2*ceil((3*log2((z_length/(6*dz_min)+1)))) then
         begin
           output('Error: dz_min is set too small/ z_length is set too large.');
           result:=false;
@@ -1422,7 +1422,7 @@ begin
             begin
                Voltage:=V_List[j];
                output(format('\nCalculation of the 3D potential solution (BIAS = %.5e V):\n',[voltage]));
-               Init(Voltage);
+               if not Init(Voltage) then break;
 
                SCbelowTip:=GetSemiconductorBelowTipApex;
 
