@@ -338,6 +338,7 @@ implementation
         result:=-Semiconductors[SpaceChargeArray[x,y,z].SCIndex].Discontinuity_CB;
         result:=result+SpaceChargeArray[x,y,z].Phi_Gamma_n;
         result:=result+SpaceChargeArray[x,y,z].Phi;
+        result:=result+SpaceChargeArray[x,y,z].dPhi;
       end;
 
       function Phi_Gamma_p(x,y,z:integer):double;
@@ -345,6 +346,7 @@ implementation
         result:=-Semiconductors[SpaceChargeArray[x,y,z].SCIndex].Discontinuity_VB;
         result:=result+SpaceChargeArray[x,y,z].Phi_Gamma_p;
         result:=result+SpaceChargeArray[x,y,z].Phi;
+        result:=result+SpaceChargeArray[x,y,z].dPhi;
       end;
 
       function Update_Phi_Gamma_n(x,y,z:integer):double;
@@ -1390,7 +1392,7 @@ implementation
       begin
         if Semiconductors[SpaceChargeArray[x,y,z].SCIndex].Inv_C then
           begin
-           Phi_k:=Phi_Gamma_n(x,y,z);
+           Phi_k:=Phi_Gamma_n(x,y,z)-SpaceChargeArray[x,y,z].dPhi;
            n_k:=Get_N(x,y,z);
            p_k:=Get_P(x,y,z);
            F2_new:=F2(x,y,z,Phi_k+SpaceChargeArray[x,y,z].dPhi,n_k,p_k+SpaceChargeArray[x,y,z].dp);
@@ -1411,7 +1413,7 @@ implementation
       begin
         if Semiconductors[SpaceChargeArray[x,y,z].SCIndex].Inv_V then
           begin
-           Phi_k:=Phi_Gamma_p(x,y,z);
+           Phi_k:=Phi_Gamma_p(x,y,z)-SpaceChargeArray[x,y,z].dPhi;
            n_k:=Get_N(x,y,z);
            p_k:=Get_P(x,y,z);
            F3_new:=F3(x,y,z,Phi_k+SpaceChargeArray[x,y,z].dPhi,n_k+SpaceChargeArray[x,y,z].dn,p_k);
