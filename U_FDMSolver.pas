@@ -333,20 +333,22 @@ implementation
          result:=a*b*2/sqrt(Pi);
       end;
 
-      function Phi_Gamma_n(x,y,z:integer):double;
+      function Phi_Gamma_n(x,y,z:integer; UsePhiNew:boolean = false):double;
       begin
         result:=-Semiconductors[SpaceChargeArray[x,y,z].SCIndex].Discontinuity_CB;
         result:=result+SpaceChargeArray[x,y,z].Phi_Gamma_n;
         result:=result+SpaceChargeArray[x,y,z].Phi;
-        result:=result+SpaceChargeArray[x,y,z].dPhi;
+        if UsePhiNew then
+          result:=result+SpaceChargeArray[x,y,z].dPhi;
       end;
 
-      function Phi_Gamma_p(x,y,z:integer):double;
+      function Phi_Gamma_p(x,y,z:integer; UsePhiNew:boolean = false):double;
       begin
         result:=-Semiconductors[SpaceChargeArray[x,y,z].SCIndex].Discontinuity_VB;
         result:=result+SpaceChargeArray[x,y,z].Phi_Gamma_p;
         result:=result+SpaceChargeArray[x,y,z].Phi;
-        result:=result+SpaceChargeArray[x,y,z].dPhi;
+        if UsePhiNew then
+          result:=result+SpaceChargeArray[x,y,z].dPhi;
       end;
 
       function Update_Phi_Gamma_n(x,y,z:integer):double;
@@ -959,7 +961,7 @@ implementation
             (SpaceChargeArray[x+1,y,z].Material=mVac) then
              begin
                pxm1:=px_array[x-1];
-               Gamma1:=(Phi_Gamma_n(x-1,y,z)-aPhi)*C_kT;
+               Gamma1:=(Phi_Gamma_n(x-1,y,z,true)-aPhi)*C_kT;
                PartX:= 2*   ( B(Gamma1)*Get_N(x-1,y,z)
                              -B(-Gamma1)*n
                             )/((px-pxm1)*(px-pxm1))
@@ -968,7 +970,7 @@ implementation
                  (SpaceChargeArray[x-1,y,z].Material=mVac) then
              begin
                pxp1:=px_array[x+1];
-               Gamma1:= (aPhi-Phi_Gamma_n(x+1,y,z))*C_kT;
+               Gamma1:= (aPhi-Phi_Gamma_n(x+1,y,z,true))*C_kT;
                PartX:= -2*   ( B(Gamma1)*n
                               -B(-Gamma1)*Get_N(x+1,y,z)
                              )/((pxp1-px)*(pxp1-px))
@@ -977,8 +979,8 @@ implementation
              begin
                pxm1:=px_array[x-1];
                pxp1:=px_array[x+1];
-               Gamma1:= (Phi_Gamma_n(x+1,y,z)-aPhi)*C_kT;
-               Gamma2:= (aPhi-Phi_Gamma_n(x-1,y,z))*C_kT;
+               Gamma1:= (Phi_Gamma_n(x+1,y,z,true)-aPhi)*C_kT;
+               Gamma2:= (aPhi-Phi_Gamma_n(x-1,y,z,true))*C_kT;
                PartX:=    ( B(Gamma1)*Get_N(x+1,y,z)
                            -B(-Gamma1)*n
                           )/((pxp1-px)*(pxp1-pxm1)* 0.5 )
@@ -991,7 +993,7 @@ implementation
             (SpaceChargeArray[x,y+1,z].Material=mVac) then
              begin
                pym1:=py_array[y-1];
-               Gamma1:=(Phi_Gamma_n(x,y-1,z)-aPhi)*C_kT;
+               Gamma1:=(Phi_Gamma_n(x,y-1,z,true)-aPhi)*C_kT;
                PartY:= 2*   ( B(Gamma1)*Get_N(x,y-1,z)
                              -B(-Gamma1)*n
                             )/((py-pym1)*(py-pym1))
@@ -1000,7 +1002,7 @@ implementation
                  (SpaceChargeArray[x,y-1,z].Material=mVac) then
              begin
                pyp1:=py_array[y+1];
-               Gamma1:=(aPhi-Phi_Gamma_n(x,y+1,z))*C_kT;
+               Gamma1:=(aPhi-Phi_Gamma_n(x,y+1,z,true))*C_kT;
                PartY:= -2*   ( B(Gamma1)*n
                               -B(-Gamma1)*Get_N(x,y+1,z)
                              )/((pyp1-py)*(pyp1-py))
@@ -1009,8 +1011,8 @@ implementation
              begin
                pym1:=py_array[y-1];
                pyp1:=py_array[y+1];
-               Gamma1:= (Phi_Gamma_n(x,y+1,z)-aPhi)*C_kT;
-               Gamma2:= (aPhi-Phi_Gamma_n(x,y-1,z))*C_kT;
+               Gamma1:= (Phi_Gamma_n(x,y+1,z,true)-aPhi)*C_kT;
+               Gamma2:= (aPhi-Phi_Gamma_n(x,y-1,z,true))*C_kT;
                PartY:=    ( B(Gamma1)*Get_N(x,y+1,z)
                            -B(-Gamma1)*n
                           )/((pyp1-py)*(pyp1-pym1)* 0.5 )
@@ -1023,7 +1025,7 @@ implementation
             (SpaceChargeArray[x,y,z+1].Material=mVac) then
              begin
                pzm1:=pz_array[z-1];
-               Gamma1:=(Phi_Gamma_n(x,y,z-1)-aPhi)*C_kT;
+               Gamma1:=(Phi_Gamma_n(x,y,z-1,true)-aPhi)*C_kT;
                PartZ:= 2*   ( B(Gamma1)*Get_N(x,y,z-1)
                              -B(-Gamma1)*n
                             )/((pz-pzm1)*(pz-pzm1))
@@ -1032,7 +1034,7 @@ implementation
                  (SpaceChargeArray[x,y,z-1].Material=mVac) then
              begin
                pzp1:=pz_array[z+1];
-               Gamma1:=(aPhi-Phi_Gamma_n(x,y,z+1))*C_kT;
+               Gamma1:=(aPhi-Phi_Gamma_n(x,y,z+1,true))*C_kT;
                PartZ:= -2*   ( B(Gamma1)*n
                               -B(-Gamma1)*Get_N(x,y,z+1)
                              )/((pzp1-pz)*(pzp1-pz))
@@ -1041,8 +1043,8 @@ implementation
              begin
                pzm1:=pz_array[z-1];
                pzp1:=pz_array[z+1];
-               Gamma1:= (Phi_Gamma_n(x,y,z+1)-aPhi)*C_kT;
-               Gamma2:= (aPhi-Phi_Gamma_n(x,y,z-1))*C_kT;
+               Gamma1:= (Phi_Gamma_n(x,y,z+1,true)-aPhi)*C_kT;
+               Gamma2:= (aPhi-Phi_Gamma_n(x,y,z-1,true))*C_kT;
                PartZ:=    ( B(Gamma1)*Get_N(x,y,z+1)
                            -B(-Gamma1)*n
                           )/((pzp1-pz)*(pzp1-pzm1)* 0.5 )
@@ -1174,7 +1176,7 @@ implementation
             (SpaceChargeArray[x+1,y,z].Material=mVac) then
             begin
               pxm1:=px_array[x-1];
-              Gamma1:=(Phi_Gamma_p(x-1,y,z)-aPhi)*C_kT;
+              Gamma1:=(Phi_Gamma_p(x-1,y,z,true)-aPhi)*C_kT;
               PartX := -2 *    ( B(Gamma1)*p
                                 -B(-Gamma1)*Get_P(x-1,y,z)
                                )/((px-pxm1)*(px-pxm1))
@@ -1183,7 +1185,7 @@ implementation
                  (SpaceChargeArray[x-1,y,z].Material=mVac) then
             begin
               pxp1:=px_array[x+1];
-              Gamma1:=(aPhi-Phi_Gamma_p(x+1,y,z))*C_kT;
+              Gamma1:=(aPhi-Phi_Gamma_p(x+1,y,z,true))*C_kT;
               PartX := 2 *    ( B(Gamma1)*Get_P(x+1,y,z)
                                -B(-Gamma1)*p
                               )/((pxp1-px)*(pxp1-px))
@@ -1192,8 +1194,8 @@ implementation
             begin
               pxm1:=px_array[x-1];
               pxp1:=px_array[x+1];
-              Gamma1:=(aPhi-Phi_Gamma_p(x+1,y,z))*C_kT;
-              Gamma2:=(Phi_Gamma_p(x-1,y,z)-aPhi)*C_kT;
+              Gamma1:=(aPhi-Phi_Gamma_p(x+1,y,z,true))*C_kT;
+              Gamma2:=(Phi_Gamma_p(x-1,y,z,true)-aPhi)*C_kT;
 
               PartX :=     ( B(Gamma1)*Get_P(x+1,y,z)
                             -B(-Gamma1)*p
@@ -1207,7 +1209,7 @@ implementation
             (SpaceChargeArray[x,y+1,z].Material=mVac) then
             begin
               pym1:=py_array[y-1];
-              Gamma1:=(Phi_Gamma_p(x,y-1,z)-aPhi)*C_kT;
+              Gamma1:=(Phi_Gamma_p(x,y-1,z,true)-aPhi)*C_kT;
               PartY := -2 *    ( B(Gamma1)*p
                                 -B(-Gamma1)*Get_P(x,y-1,z)
                                )/((py-pym1)*(py-pym1))
@@ -1216,7 +1218,7 @@ implementation
                  (SpaceChargeArray[x,y-1,z].Material=mVac) then
             begin
               pyp1:=py_array[y+1];
-              Gamma1:=(aPhi-Phi_Gamma_p(x,y+1,z))*C_kT;
+              Gamma1:=(aPhi-Phi_Gamma_p(x,y+1,z,true))*C_kT;
               PartY := 2 *    ( B(Gamma1)*Get_P(x,y+1,z)
                                -B(-Gamma1)*p
                               )/((pyp1-py)*(pyp1-py))
@@ -1225,8 +1227,8 @@ implementation
             begin
               pym1:=py_array[y-1];
               pyp1:=py_array[y+1];
-              Gamma1:=(aPhi-Phi_Gamma_p(x,y+1,z))*C_kT;
-              Gamma2:=(Phi_Gamma_p(x,y-1,z)-aPhi)*C_kT;
+              Gamma1:=(aPhi-Phi_Gamma_p(x,y+1,z,true))*C_kT;
+              Gamma2:=(Phi_Gamma_p(x,y-1,z,true)-aPhi)*C_kT;
               PartY := +   ( B(Gamma1)*Get_P(x,y+1,z)
                             -B(-Gamma1)*p
                            )/((pyp1-py)*(pyp1-pym1)* 0.5 )
@@ -1239,7 +1241,7 @@ implementation
             (SpaceChargeArray[x,y,z+1].Material=mVac) then
             begin
               pzm1:=pz_array[z-1];
-              Gamma1:=(Phi_Gamma_p(x,y,z-1)-aPhi)*C_kT;
+              Gamma1:=(Phi_Gamma_p(x,y,z-1,true)-aPhi)*C_kT;
               PartZ := -2 *    ( B(Gamma1)*p
                                 -B(-Gamma1)*Get_P(x,y,z-1)
                                )/((pz-pzm1)*(pz-pzm1))
@@ -1248,7 +1250,7 @@ implementation
                  (SpaceChargeArray[x,y,z-1].Material=mVac) then
             begin
               pzp1:=pz_array[z+1];
-              Gamma1:= (aPhi-Phi_Gamma_p(x,y,z+1))*C_kT;
+              Gamma1:= (aPhi-Phi_Gamma_p(x,y,z+1,true))*C_kT;
               PartZ := 2 *    ( B(Gamma1)*Get_P(x,y,z+1)
                                -B(-Gamma1)*p
                               )/((pzp1-pz)*(pzp1-pz))
@@ -1257,8 +1259,8 @@ implementation
             begin
               pzm1:=pz_array[z-1];
               pzp1:=pz_array[z+1];
-              Gamma1:=(aPhi-Phi_Gamma_p(x,y,z+1))*C_kT;
-              Gamma2:=(Phi_Gamma_p(x,y,z-1)-aPhi)*C_kT;
+              Gamma1:=(aPhi-Phi_Gamma_p(x,y,z+1,true))*C_kT;
+              Gamma2:=(Phi_Gamma_p(x,y,z-1,true)-aPhi)*C_kT;
               PartZ := +   ( B(Gamma1)*Get_P(x,y,z+1)
                             -B(-Gamma1)*p
                            )/((pzp1-pz)*(pzp1-pzm1)* 0.5 )
@@ -1392,7 +1394,7 @@ implementation
       begin
         if Semiconductors[SpaceChargeArray[x,y,z].SCIndex].Inv_C then
           begin
-           Phi_k:=Phi_Gamma_n(x,y,z)-SpaceChargeArray[x,y,z].dPhi;
+           Phi_k:=Phi_Gamma_n(x,y,z);
            n_k:=Get_N(x,y,z);
            p_k:=Get_P(x,y,z);
            F2_new:=F2(x,y,z,Phi_k+SpaceChargeArray[x,y,z].dPhi,n_k,p_k+SpaceChargeArray[x,y,z].dp);
@@ -1413,7 +1415,7 @@ implementation
       begin
         if Semiconductors[SpaceChargeArray[x,y,z].SCIndex].Inv_V then
           begin
-           Phi_k:=Phi_Gamma_p(x,y,z)-SpaceChargeArray[x,y,z].dPhi;
+           Phi_k:=Phi_Gamma_p(x,y,z);
            n_k:=Get_N(x,y,z);
            p_k:=Get_P(x,y,z);
            F3_new:=F3(x,y,z,Phi_k+SpaceChargeArray[x,y,z].dPhi,n_k+SpaceChargeArray[x,y,z].dn,p_k);
