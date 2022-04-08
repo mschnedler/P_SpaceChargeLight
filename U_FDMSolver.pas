@@ -1,5 +1,22 @@
 unit U_FDMSolver;
-
+// ********************************************************************
+// * Unit U_FDMSolver.pas                                             *
+// *                                                                  *
+// * Self-consistent evaluation of Poisson- and Continuity equations  *
+// * in semiconductors and at semiconductor/vacuum/metal interfaces   *
+// *                                                                  *
+// * Author:                                                          *
+// *                                                                  *
+// * Michael Schnedler                                                *
+// * Forschungszentrum Juelich GmbH                                   *
+// * Wilhelm-Johnen-Strasse                                           *
+// * 52428 Juelich                                                    *
+// *                                                                  *
+// * Please cite: 10.1103/PhysRevB.91.235305                          *
+// *              10.1103/PhysRevB.93.195444                          *
+// *                                                                  *
+// * Published under GNU General Public License v3.0                  *
+// ********************************************************************
 interface
 
 uses
@@ -224,9 +241,9 @@ implementation
       begin
         for x := 0 to NodeCount_x-1 do
           for y := 0 to NodeCount_y-1 do
-            for z := 0 to NodeCount_z-1 do   
-              if SpaceChargeArray[x,y,z].Material=mSC then             
-                begin     
+            for z := 0 to NodeCount_z-1 do
+              if SpaceChargeArray[x,y,z].Material=mSC then
+                begin
                   if (x=0) or ((x>0) and (x<NodeCount_x-1) and (SpaceChargeArray[x-1,y,z].SCIndex<>SpaceChargeArray[x,y,z].SCIndex)) then
                     dPdx:=(SpaceChargeArray[x+1,y,z].Polarisation.x-SpaceChargeArray[x,y,z].Polarisation.x)/(px_array[x+1]-px_array[x])
                   else if (x=NodeCount_x-1) or ((x>0) and (x<NodeCount_x-1) and (SpaceChargeArray[x+1,y,z].SCIndex<>SpaceChargeArray[x,y,z].SCIndex)) then
@@ -250,7 +267,7 @@ implementation
                 else SpaceChargeArray[x,y,z].divP:=0;
       end;
 
-      
+
       // Returns the electrostatic potential Phi at the integer position x,y,z.
       // (to be more precise: it is the electrostatic potential of the previous
       //  iteration step: k-1)
@@ -419,9 +436,427 @@ implementation
                 SpaceChargeArray[x,y,z].IntZ:=IntZ;
                 SpaceChargeArray[x,y,z].SurfCount:=SurfCount;
                 SpaceChargeArray[x,y,z].IntCount:=IntCount;
+                if IntCount>0 then
+                   setlength(SpaceChargeArray[x,y,z].Int_n_p,6);
               end;
 
       end;
+
+
+
+      // Helper function for F1 that includes modifications of the Poission
+      // equation at surfaces or interfaces of the semiconductor.
+
+      // Three different situations are treated in each spatial direction:
+
+      // 1. Nodepoint is a surface
+      // 2. Nodepoint is an interface (e.g. at a hetero-/ homojunction)
+      // 3. Nodepoint is a surface and an interface
+
+      // 1. Case 1: "Surface"
+      // If the Nodepoint is at a surface only, the discretiation of the
+      // Poission equation is modified in analogy to Eq. 6.1-130 in Ref [2].
+      // A surface charge Q_int is calculated by assuming a Gaussian distribution
+      // of the surface state density, which is integrated from the charge-
+      // neutrality level to the Fermi-level (=Q_surf). A change in Polarization
+      // is accounted for, too.
+
+      // 2. Case 2: "Interface":
+      // Interfaces are treated similar to surfaces, but with two
+      // fundamental differences: I. The permittivity to the left and to the
+      // right side of the interface are given by the respective semiconductors.
+      // II. In Eq. 6.1-129 in Ref [2], a respective charge term is added. This
+      // yields that rhos of both semiconductors (left and right to the interface)
+      // need to be calculated at the position of the interface (i.e. at x,y,z).
+      // While the charge of the "right" semiconductor is stored in n,p which
+      // are parameters of the function F1, the charge of the "left" semiconductor
+      // is stored separately in Int_n_p[0..6] = n,p,Na,Nd, dNa_dPhi, dNd_dPhi.
+      // A change in Polarization is accounted for, too.
+
+      // 3. "Multiple surfaces and interfaces"
+      // If there are more than one interface and surface at a
+      // single nodepoint, the following approach is used:
+      // The boundary condition n*(D1-D2) + Qint = 0 (cf. Eq. 6.1-125 in Ref [2])
+      // where n is the normal vector and D1, D2 are the dielectric displacement
+      // fields on both sides of the interface and Qint is the interface/
+      // surface charge has to be fullfilled for all interfaces/surfaces.
+      // The dielectric displacement fields are substituted by the first
+      // derivative of the electrostatic potential phi in normal direction n.
+      // For the first derivative, only first order one-sided terms are
+      // used, while the second order terms, as shown in Eq. 6.1-126 in Ref [2],
+      // are ignored.
+
+      procedure SurfaceAndInterfaces(x,y,z:integer; aPhi,n,p, E_Offset,
+                                    px,py,pz,pxp1,pxm1,pyp1,pym1,pzp1,pzm1:double;
+                                    SC,SurfCount,IntCount:integer;
+                                    var PartX,PartY,PartZ, rho: double);
+      var SurfX,SurfY,SurfZ,IntX,IntY,IntZ:boolean;
+          Cfrac:double;
+          Epsi1,Epsi2:double;
+          Q_int, Phi_quasi, P_diff:double;
+          Q_surf:double;
+          IShift:integer;
+      begin
+
+        if SurfCount+IntCount>1 then
+          begin
+            PartX:=0;
+            PartY:=0;
+            PartZ:=0;
+          end;
+
+        SurfX:=SpaceChargeArray[x,y,z].SurfX;
+        SurfY:=SpaceChargeArray[x,y,z].SurfY;
+        SurfZ:=SpaceChargeArray[x,y,z].SurfZ;
+        IntX:=SpaceChargeArray[x,y,z].IntX;
+        IntY:=SpaceChargeArray[x,y,z].IntY;
+        IntZ:=SpaceChargeArray[x,y,z].IntZ;
+
+        P_diff:=0;
+        Q_surf:=0;
+        Cfrac:=0;
+
+        // Determination of surface state induced surface charge
+        if SurfCount>0 then
+        begin
+           phi_quasi:=Semiconductors[SC].E_F-GetE_Fqn2(SC,aPhi+E_offset,n)-(aPhi+E_offset);
+           if not GetRhoSurf(phi_quasi,Q_surf,SC) then output('out of rhosurflist.');
+           Q_surf:=(e*Semiconductors[SC].Const_Surface_charge+Q_surf)*1e-18;
+        end;
+
+        if SurfX or IntX then
+        begin
+           // Determination of Permittivity and Polarization change on both
+           // sides of the interface/surface
+           Epsi1:=Epsi_vac;
+           Epsi2:=Epsi_vac;
+           if SpaceChargeArray[x+1,y,z].Material=mVac then IShift:=1 else IShift:=0;
+           if SpaceChargeArray[x+IShift,y,z].Material =mSC then
+               Epsi1:= Semiconductors[SpaceChargeArray[x+IShift,y,z].SCIndex].Epsi_semi;
+           if SpaceChargeArray[x-1+IShift,y,z].Material =mSC then
+               Epsi2:= Semiconductors[SpaceChargeArray[x-1+IShift,y,z].SCIndex].Epsi_semi;
+           P_diff:=-e*(SpaceChargeArray[x+IShift,y,z].Polarisation.x-
+                       SpaceChargeArray[x-1+IShift,y,z].Polarisation.x);
+
+           // Assignment of the surface charge density
+           if SurfX then Q_int:=Q_surf else Q_int:=0;
+
+           if SurfCount+IntCount=1 then
+             begin
+               // Case 1 and 2: Surface or Interface
+               PartX:= ( Epsi1*(Phi(x+1,y,z)-aPhi)/(pxp1-px)
+                         -Epsi2*(aPhi-Phi(x-1,y,z))/(px-pxm1)
+                         +Q_int+P_diff
+                         )/((Epsi1*(pxp1-px)+Epsi2*(px-pxm1))/2);
+               if SurfX then
+                 if SpaceChargeArray[x-1+IShift,y,z].Material=mVac then
+                    Cfrac:=Epsi1*(pxp1-px)/(Epsi1*(pxp1-px)+Epsi2*(px-pxm1))
+                 else
+                    Cfrac:=Epsi2*(px-pxm1)/(Epsi1*(pxp1-px)+Epsi2*(px-pxm1));
+               if IntX then
+                 begin
+                    rho:= (pxp1-px)*rho;
+                    rho:=rho+(px-pxm1)*(-SpaceChargeArray[x,y,z].Int_n_p[0]
+                          +SpaceChargeArray[x,y,z].Int_n_p[1]
+                          +SpaceChargeArray[x,y,z].Int_n_p[2]
+                          -SpaceChargeArray[x,y,z].Int_n_p[3]);
+                    rho:=rho/(Epsi1*(pxp1-px)+Epsi2*(px-pxm1))*e;
+                    rho:=rho/Semiconductors[SC].C_Poisson;
+                    Cfrac:=1;
+                 end;
+             end
+           else
+             // Case 3: Multiple surfaces and interfaces
+             PartX:=   Epsi1*(Phi(x+1,y,z)-aPhi)/(pxp1-px)
+                       -Epsi2*(aPhi-Phi(x-1,y,z))/(px-pxm1)
+                       +Q_int+P_diff;
+        end;
+
+        if SurfY or IntY then
+        begin
+           // Determination of Permittivity and Polarization change on both
+           // sides of the interface/surface
+           Epsi1:=Epsi_vac;
+           Epsi2:=Epsi_vac;
+           if SpaceChargeArray[x,y+1,z].Material=mVac then IShift:=1 else IShift:=0;
+           if SpaceChargeArray[x,y+IShift,z].Material =mSC then
+               Epsi1:= Semiconductors[SpaceChargeArray[x,y+IShift,z].SCIndex].Epsi_semi;
+           if SpaceChargeArray[x,y-1+IShift,z].Material =mSC then
+               Epsi2:= Semiconductors[SpaceChargeArray[x,y-1+IShift,z].SCIndex].Epsi_semi;
+           P_diff:=-e*(SpaceChargeArray[x,y+IShift,z].Polarisation.y-
+                       SpaceChargeArray[x,y-1+IShift,z].Polarisation.y);
+
+           // Assignment of the surface charge density
+           if SurfY then Q_int:=Q_surf else Q_int:=0;
+
+           if SurfCount+IntCount=1 then
+             begin
+               // Case 1 and 2: Surface or Interface
+               PartY:= ( Epsi1*(Phi(x,y+1,z)-aPhi)/(pyp1-py)
+                         -Epsi2*(aPhi-Phi(x,y-1,z))/(py-pym1)
+                         +Q_int+P_diff
+                         )/((Epsi1*(pyp1-py)+Epsi2*(py-pym1))/2);
+               if SurfY then
+                 if SpaceChargeArray[x,y-1+IShift,z].Material=mVac then
+                    Cfrac:=Epsi1*(pyp1-py)/(Epsi1*(pyp1-py)+Epsi2*(py-pym1))
+                 else
+                    Cfrac:=Epsi2*(py-pym1)/(Epsi1*(pyp1-py)+Epsi2*(py-pym1));
+               if IntY then
+                 begin
+                    rho:= (pyp1-py)*rho;
+                    rho:=rho+(py-pym1)*(-SpaceChargeArray[x,y,z].Int_n_p[0]
+                          +SpaceChargeArray[x,y,z].Int_n_p[1]
+                          +SpaceChargeArray[x,y,z].Int_n_p[2]
+                          -SpaceChargeArray[x,y,z].Int_n_p[3]);
+                    rho:=rho/(Epsi1*(pyp1-py)+Epsi2*(py-pym1))*e;
+                    rho:=rho/Semiconductors[SC].C_Poisson;
+                    Cfrac:=1;
+                 end;
+             end
+           else
+             // Case 3: Multiple surfaces and interfaces
+             PartY:=   Epsi1*(Phi(x,y+1,z)-aPhi)/(pyp1-py)
+                       -Epsi2*(aPhi-Phi(x,y-1,z))/(py-pym1)
+                       +Q_int+P_diff;
+        end;
+
+        if SurfZ or IntZ then
+        begin
+           // Determination of Permittivity and Polarization change on both
+           // sides of the interface/surface
+           Epsi1:=Epsi_vac;
+           Epsi2:=Epsi_vac;
+           if SpaceChargeArray[x,y,z+1].Material=mVac then IShift:=1 else IShift:=0;
+           if SpaceChargeArray[x,y,z+IShift].Material =mSC then
+               Epsi1:= Semiconductors[SpaceChargeArray[x,y,z+IShift].SCIndex].Epsi_semi;
+           if SpaceChargeArray[x,y,z-1+IShift].Material =mSC then
+               Epsi2:= Semiconductors[SpaceChargeArray[x,y,z-1+IShift].SCIndex].Epsi_semi;
+           P_diff:=-e*(SpaceChargeArray[x,y,z+IShift].Polarisation.z-
+                       SpaceChargeArray[x,y,z-1+IShift].Polarisation.z);
+
+           // Assignment of the surface charge density
+           if SurfZ then Q_int:=Q_surf else Q_int:=0;
+
+           if SurfCount+IntCount=1 then
+             begin
+               // Case 1 and 2: Surface or Interface
+               PartZ:= ( Epsi1*(Phi(x,y,z+1)-aPhi)/(pzp1-pz)
+                         -Epsi2*(aPhi-Phi(x,y,z-1))/(pz-pzm1)
+                         +Q_int+P_diff
+                         )/((Epsi1*(pzp1-pz)+Epsi2*(pz-pzm1))/2);
+               if SurfZ then
+                 if SpaceChargeArray[x,y,z-1+IShift].Material=mVac then
+                    Cfrac:=Epsi1*(pzp1-pz)/(Epsi1*(pzp1-pz)+Epsi2*(pz-pzm1))
+                 else
+                    Cfrac:=Epsi2*(pz-pzm1)/(Epsi1*(pzp1-pz)+Epsi2*(pz-pzm1));
+               if IntZ then
+                 begin
+                    rho:= (pzp1-pz)*rho;
+                    rho:=rho+(pz-pzm1)*(-SpaceChargeArray[x,y,z].Int_n_p[0]
+                          +SpaceChargeArray[x,y,z].Int_n_p[1]
+                          +SpaceChargeArray[x,y,z].Int_n_p[2]
+                          -SpaceChargeArray[x,y,z].Int_n_p[3]);
+                    rho:=rho/(Epsi1*(pzp1-pz)+Epsi2*(pz-pzm1))*e;
+                    rho:=rho/Semiconductors[SC].C_Poisson;
+                    Cfrac:=1;
+                 end;
+             end
+           else
+             // Case 3: Multiple surfaces and interfaces
+             PartZ:=   Epsi1*(Phi(x,y,z+1)-aPhi)/(pzp1-pz)
+                       -Epsi2*(aPhi-Phi(x,y,z-1))/(pz-pzm1)
+                       +Q_int+P_diff;
+        end;
+
+        rho:=rho*Cfrac;
+
+      end;
+
+
+
+      // Derivative of the function SurfaceAndInterfaces defined above
+      // with respect to the electrostatic potential phi. This derivative
+      // is needed by the iteration scheme (Newton SOR).
+
+      procedure dSurfaceAndInterfaces_dPhi(x,y,z:integer; aPhi,n,p, E_Offset,
+                                    px,py,pz,pxp1,pxm1,pyp1,pym1,pzp1,pzm1:double;
+                                    SC,SurfCount,IntCount:integer;
+                                    var PartX,PartY,PartZ, drho: double);
+      var SurfX,SurfY,SurfZ,IntX,IntY,IntZ:boolean;
+          Cfrac:double;
+          Epsi1,Epsi2:double;
+          dQ_int_dPhi, Phi_quasi:double;
+          dQ_surf_dPhi:double;
+          IShift:integer;
+      begin
+
+        if SurfCount+IntCount>1 then
+          begin
+            PartX:=0;
+            PartY:=0;
+            PartZ:=0;
+          end;
+
+        SurfX:=SpaceChargeArray[x,y,z].SurfX;
+        SurfY:=SpaceChargeArray[x,y,z].SurfY;
+        SurfZ:=SpaceChargeArray[x,y,z].SurfZ;
+        IntX:=SpaceChargeArray[x,y,z].IntX;
+        IntY:=SpaceChargeArray[x,y,z].IntY;
+        IntZ:=SpaceChargeArray[x,y,z].IntZ;
+
+        dQ_surf_dPhi:=0;
+        Cfrac:=0;
+
+        // Determination of surface state induced surface charge
+        if SurfCount>0 then
+        begin
+           phi_quasi:=Semiconductors[SC].E_F-GetE_Fqn2(SC,aPhi+E_offset,n)-(aPhi+E_offset);
+           dQ_surf_dPhi:=-drho_surf_dPhi(phi_quasi,SC)*1e-18;
+        end;
+
+
+        if SurfX or IntX then
+        begin
+           // Determination of Permittivity and Polarization change on both
+           // sides of the interface/surface
+           Epsi1:=Epsi_vac;
+           Epsi2:=Epsi_vac;
+           if SpaceChargeArray[x+1,y,z].Material=mVac then IShift:=1 else IShift:=0;
+           if SpaceChargeArray[x+IShift,y,z].Material =mSC then
+               Epsi1:= Semiconductors[SpaceChargeArray[x+IShift,y,z].SCIndex].Epsi_semi;
+           if SpaceChargeArray[x-1+IShift,y,z].Material =mSC then
+               Epsi2:= Semiconductors[SpaceChargeArray[x-1+IShift,y,z].SCIndex].Epsi_semi;
+
+
+           // Assignment of the surface charge density
+           if SurfX then dQ_int_dPhi:=dQ_surf_dPhi else dQ_int_dPhi:=0;
+
+           if SurfCount+IntCount=1 then
+             begin
+               // Case 1 and 2: Surface or Interface
+               PartX:= ( -Epsi1/(pxp1-px)
+                         -Epsi2/(px-pxm1)
+                         +dQ_int_dPhi
+                         )/((Epsi1*(pxp1-px)+Epsi2*(px-pxm1))/2);
+               if SurfX then
+                 if SpaceChargeArray[x-1+IShift,y,z].Material=mVac then
+                    Cfrac:=Epsi1*(pxp1-px)/(Epsi1*(pxp1-px)+Epsi2*(px-pxm1))
+                 else
+                    Cfrac:=Epsi2*(px-pxm1)/(Epsi1*(pxp1-px)+Epsi2*(px-pxm1));
+               if IntX then
+                 begin
+                    drho:= (pxp1-px)*drho;
+                    drho:=drho+(px-pxm1)*(
+                          SpaceChargeArray[x,y,z].Int_n_p[4]
+                          -SpaceChargeArray[x,y,z].Int_n_p[5]);
+                    drho:=drho/(Epsi1*(pxp1-px)+Epsi2*(px-pxm1))*e;
+                    drho:=drho/Semiconductors[SC].C_Poisson;
+                    Cfrac:=1;
+                 end;
+             end
+           else
+             // Case 3: Multiple surfaces and interfaces
+             PartX:=   -Epsi1/(pxp1-px)
+                       -Epsi2/(px-pxm1)
+                       +dQ_int_dPhi;
+        end;
+
+        if SurfY or IntY then
+        begin
+           // Determination of Permittivity and Polarization change on both
+           // sides of the interface/surface
+           Epsi1:=Epsi_vac;
+           Epsi2:=Epsi_vac;
+           if SpaceChargeArray[x,y+1,z].Material=mVac then IShift:=1 else IShift:=0;
+           if SpaceChargeArray[x,y+IShift,z].Material =mSC then
+               Epsi1:= Semiconductors[SpaceChargeArray[x,y+IShift,z].SCIndex].Epsi_semi;
+           if SpaceChargeArray[x,y-1+IShift,z].Material =mSC then
+               Epsi2:= Semiconductors[SpaceChargeArray[x,y-1+IShift,z].SCIndex].Epsi_semi;
+
+           // Assignment of the surface charge density
+           if SurfY then dQ_int_dPhi:=dQ_surf_dPhi else dQ_int_dPhi:=0;
+
+           if SurfCount+IntCount=1 then
+             begin
+               // Case 1 and 2: Surface or Interface
+               PartY:= ( -Epsi1/(pyp1-py)
+                         -Epsi2/(py-pym1)
+                         +dQ_int_dPhi
+                         )/((Epsi1*(pyp1-py)+Epsi2*(py-pym1))/2);
+               if SurfY then
+                 if SpaceChargeArray[x,y-1+IShift,z].Material=mVac then
+                    Cfrac:=Epsi1*(pyp1-py)/(Epsi1*(pyp1-py)+Epsi2*(py-pym1))
+                 else
+                    Cfrac:=Epsi2*(py-pym1)/(Epsi1*(pyp1-py)+Epsi2*(py-pym1));
+               if IntY then
+                 begin
+                    drho:= (pyp1-py)*drho;
+                    drho:=drho+(py-pym1)*(
+                          SpaceChargeArray[x,y,z].Int_n_p[4]
+                          -SpaceChargeArray[x,y,z].Int_n_p[5]);
+                    drho:=drho/(Epsi1*(pyp1-py)+Epsi2*(py-pym1))*e;
+                    drho:=drho/Semiconductors[SC].C_Poisson;
+                    Cfrac:=1;
+                 end;
+             end
+           else
+             // Case 3: Multiple surfaces and interfaces
+             PartY:=   -Epsi1/(pyp1-py)
+                       -Epsi2/(py-pym1)
+                       +dQ_int_dPhi;
+        end;
+
+        if SurfZ or IntZ then
+        begin
+           // Determination of Permittivity and Polarization change on both
+           // sides of the interface/surface
+           Epsi1:=Epsi_vac;
+           Epsi2:=Epsi_vac;
+           if SpaceChargeArray[x,y,z+1].Material=mVac then IShift:=1 else IShift:=0;
+           if SpaceChargeArray[x,y,z+IShift].Material =mSC then
+               Epsi1:= Semiconductors[SpaceChargeArray[x,y,z+IShift].SCIndex].Epsi_semi;
+           if SpaceChargeArray[x,y,z-1+IShift].Material =mSC then
+               Epsi2:= Semiconductors[SpaceChargeArray[x,y,z-1+IShift].SCIndex].Epsi_semi;
+
+           // Assignment of the surface charge density
+           if SurfZ then dQ_int_dPhi:=dQ_surf_dPhi else dQ_int_dPhi:=0;
+
+           if SurfCount+IntCount=1 then
+             begin
+               // Case 1 and 2: Surface or Interface
+               PartZ:= ( -Epsi1/(pzp1-pz)
+                         -Epsi2/(pz-pzm1)
+                         +dQ_int_dPhi
+                         )/((Epsi1*(pzp1-pz)+Epsi2*(pz-pzm1))/2);
+               if SurfZ then
+                 if SpaceChargeArray[x,y,z-1+IShift].Material=mVac then
+                    Cfrac:=Epsi1*(pzp1-pz)/(Epsi1*(pzp1-pz)+Epsi2*(pz-pzm1))
+                 else
+                    Cfrac:=Epsi2*(pz-pzm1)/(Epsi1*(pzp1-pz)+Epsi2*(pz-pzm1));
+               if IntZ then
+                 begin
+                    drho:= (pzp1-pz)*drho;
+                    drho:=drho+(pz-pzm1)*(
+                           SpaceChargeArray[x,y,z].Int_n_p[4]
+                          -SpaceChargeArray[x,y,z].Int_n_p[5]);
+                    drho:=drho/(Epsi1*(pzp1-pz)+Epsi2*(pz-pzm1))*e;
+                    drho:=drho/Semiconductors[SC].C_Poisson;
+                    Cfrac:=1;
+                 end;
+             end
+           else
+             // Case 3: Multiple surfaces and interfaces
+             PartZ:=   -Epsi1/(pzp1-pz)
+                       -Epsi2/(pz-pzm1)
+                       +dQ_int_dPhi;
+        end;
+
+        drho:=drho*Cfrac;
+
+      end;
+
+
+
 
       // Poisson equation in the bulk, such, that F1(Phi,n,p) = 0,
       // in analogy to [2].
@@ -435,13 +870,7 @@ implementation
           PartX,PartY,PartZ:double;
           SC:integer;
           E_offset:double;
-          SurfX,SurfY,SurfZ,IntX,IntY,IntZ:boolean;
           SurfCount,IntCount:integer;
-          Cfrac:double;
-          Epsi1,Epsi2:double;
-          Q_int, Phi_quasi, P_diff:double;
-          Q_surf:double;
-          IShift:integer;
       begin
 
         SC:=SpaceChargeArray[x,y,z].SCIndex;
@@ -508,152 +937,23 @@ implementation
                       )*(2/(pzp1-pzm1));
           end;
 
+        if SpaceChargeArray[x,y,z].Material=mSC then
+           rho:=-n+p+ND_ionized(Semiconductors[SC].E_F,aPhi+E_offset,SC)
+                -NA_ionized(Semiconductors[SC].E_F,aPhi+E_offset,SC)
+        else
+           rho:=0;
+
+
         //Surface and Interface treatment
         SurfCount:=SpaceChargeArray[x,y,z].SurfCount;
         IntCount:=SpaceChargeArray[x,y,z].IntCount;
 
-        if SurfCount+IntCount=0 then
-          begin
-             result:=PartX+PartY+PartZ;
-             if SpaceChargeArray[x,y,z].Material=mSC then
-                rho:=-n+p+ND_ionized(Semiconductors[SC].E_F,aPhi+E_offset,SC)
-                     -NA_ionized(Semiconductors[SC].E_F,aPhi+E_offset,SC)
-             else rho:=0;
-             result:=result+(rho-SpaceChargeArray[x,y,z].divP)
-                            *Semiconductors[SC].C_Poisson;
-             exit;
-          end 
-        else if SurfCount+IntCount>1 then
-          begin
-            PartX:=0;
-            PartY:=0;
-            PartZ:=0;
-            Cfrac:=0;
-          end
-        else
-          Cfrac:=1;
-
-        SurfX:=SpaceChargeArray[x,y,z].SurfX;
-        SurfY:=SpaceChargeArray[x,y,z].SurfY;
-        SurfZ:=SpaceChargeArray[x,y,z].SurfZ;
-        IntX:=SpaceChargeArray[x,y,z].IntX;
-        IntY:=SpaceChargeArray[x,y,z].IntY;
-        IntZ:=SpaceChargeArray[x,y,z].IntZ;
-
-        P_diff:=0;
-        Q_surf:=0;
-        
-        if SurfCount>0 then
-        begin
-           phi_quasi:=Semiconductors[SC].E_F-GetE_Fqn2(SC,aPhi+E_offset,n)-(aPhi+E_offset);
-           if not GetRhoSurf(phi_quasi,Q_surf,SC) then output('out of rhosurflist.');
-           Q_surf:=(e*Semiconductors[SC].Const_Surface_charge+Q_surf)*1e-18;
-        end;
-
-        if SurfX or IntX then
-        begin
-           Epsi1:=Epsi_vac;
-           Epsi2:=Epsi_vac;
-           if SpaceChargeArray[x+1,y,z].Material=mVac then IShift:=1 else IShift:=0;
-           if SpaceChargeArray[x+IShift,y,z].Material =mSC then
-               Epsi1:= Semiconductors[SpaceChargeArray[x+IShift,y,z].SCIndex].Epsi_semi;
-           if SpaceChargeArray[x-1+IShift,y,z].Material =mSC then
-               Epsi2:= Semiconductors[SpaceChargeArray[x-1+IShift,y,z].SCIndex].Epsi_semi;
-           P_diff:=-e*(SpaceChargeArray[x+IShift,y,z].Polarisation.x-
-                       SpaceChargeArray[x-1+IShift,y,z].Polarisation.x);
-
-           if SurfX then Q_int:=Q_surf else Q_int:=0;
-           
-           if SurfCount+IntCount=1 then
-             begin
-               PartX:= ( Epsi1*(Phi(x+1,y,z)-aPhi)/(pxp1-px)
-                         -Epsi2*(aPhi-Phi(x-1,y,z))/(px-pxm1)
-                         +Q_int+P_diff
-                         )/((Epsi1*(pxp1-px)+Epsi2*(px-pxm1))/2);
-               if SurfX then
-                 if SpaceChargeArray[x-1+IShift,y,z].Material=mVac then
-                    Cfrac:=Epsi1*(pxp1-px)/(Epsi1*(pxp1-px)+Epsi2*(px-pxm1))
-                 else
-                    Cfrac:=Epsi2*(px-pxm1)/(Epsi1*(pxp1-px)+Epsi2*(px-pxm1));
-             end
-           else
-             PartX:=   Epsi1*(Phi(x+1,y,z)-aPhi)/(pxp1-px)
-                       -Epsi2*(aPhi-Phi(x-1,y,z))/(px-pxm1)
-                       +Q_int+P_diff;
-        end;
-
-        if SurfY or IntY then
-        begin
-           Epsi1:=Epsi_vac;
-           Epsi2:=Epsi_vac;
-           if SpaceChargeArray[x,y+1,z].Material=mVac then IShift:=1 else IShift:=0;
-           if SpaceChargeArray[x,y+IShift,z].Material =mSC then
-               Epsi1:= Semiconductors[SpaceChargeArray[x,y+IShift,z].SCIndex].Epsi_semi;
-           if SpaceChargeArray[x,y-1+IShift,z].Material =mSC then
-               Epsi2:= Semiconductors[SpaceChargeArray[x,y-1+IShift,z].SCIndex].Epsi_semi;
-           P_diff:=-e*(SpaceChargeArray[x,y+IShift,z].Polarisation.y-
-                       SpaceChargeArray[x,y-1+IShift,z].Polarisation.y);
-
-           if SurfY then Q_int:=Q_surf else Q_int:=0;
-                       
-           if SurfCount+IntCount=1 then
-             begin
-               PartY:= ( Epsi1*(Phi(x,y+1,z)-aPhi)/(pyp1-py)
-                         -Epsi2*(aPhi-Phi(x,y-1,z))/(py-pym1)
-                         +Q_int+P_diff
-                         )/((Epsi1*(pyp1-py)+Epsi2*(py-pym1))/2);
-               if SurfY then
-                 if SpaceChargeArray[x,y-1+IShift,z].Material=mVac then
-                    Cfrac:=Epsi1*(pyp1-py)/(Epsi1*(pyp1-py)+Epsi2*(py-pym1))
-                 else
-                    Cfrac:=Epsi2*(py-pym1)/(Epsi1*(pyp1-py)+Epsi2*(py-pym1));
-             end
-           else
-             PartY:=   Epsi1*(Phi(x,y+1,z)-aPhi)/(pyp1-py)
-                       -Epsi2*(aPhi-Phi(x,y-1,z))/(py-pym1)
-                       +Q_int+P_diff;
-        end;
-
-        if SurfZ or IntZ then
-        begin
-           Epsi1:=Epsi_vac;
-           Epsi2:=Epsi_vac;
-           if SpaceChargeArray[x,y,z+1].Material=mVac then IShift:=1 else IShift:=0;
-           if SpaceChargeArray[x,y,z+IShift].Material =mSC then
-               Epsi1:= Semiconductors[SpaceChargeArray[x,y,z+IShift].SCIndex].Epsi_semi;
-           if SpaceChargeArray[x,y,z-1+IShift].Material =mSC then
-               Epsi2:= Semiconductors[SpaceChargeArray[x,y,z-1+IShift].SCIndex].Epsi_semi;
-           P_diff:=-e*(SpaceChargeArray[x,y,z+IShift].Polarisation.z-
-                       SpaceChargeArray[x,y,z-1+IShift].Polarisation.z);
-
-           if SurfZ then Q_int:=Q_surf else Q_int:=0;
-           
-           if SurfCount+IntCount=1 then
-             begin
-               PartZ:= ( Epsi1*(Phi(x,y,z+1)-aPhi)/(pzp1-pz)
-                         -Epsi2*(aPhi-Phi(x,y,z-1))/(pz-pzm1)
-                         +Q_int+P_diff
-                         )/((Epsi1*(pzp1-pz)+Epsi2*(pz-pzm1))/2);
-               if SurfZ then
-                 if SpaceChargeArray[x,y,z-1+IShift].Material=mVac then
-                    Cfrac:=Epsi1*(pzp1-pz)/(Epsi1*(pzp1-pz)+Epsi2*(pz-pzm1))
-                 else
-                    Cfrac:=Epsi2*(pz-pzm1)/(Epsi1*(pzp1-pz)+Epsi2*(pz-pzm1));
-             end
-           else
-             PartZ:=   Epsi1*(Phi(x,y,z+1)-aPhi)/(pzp1-pz)
-                       -Epsi2*(aPhi-Phi(x,y,z-1))/(pz-pzm1)
-                       +Q_int+P_diff;
-        end;
-
+        if SurfCount+IntCount>0 then
+          SurfaceAndInterfaces(x,y,z,aPhi,n,p,E_Offset,px,py,pz,pxp1,pxm1,
+                               pyp1,pym1,pzp1,pzm1,SC,SurfCount,IntCount,
+                               PartX,PartY,PartZ,rho);
 
         result:=PartX+PartY+PartZ;
-        if (SpaceChargeArray[x,y,z].Material=mSC) and (Cfrac>0) then
-          rho:=-n+p+ND_ionized(Semiconductors[SC].E_F,aPhi+E_offset,SC)
-               -NA_ionized(Semiconductors[SC].E_F,aPhi+E_offset,SC)
-        else rho:=0;
-
-        rho:=rho*Cfrac;
         result:=result+(rho-SpaceChargeArray[x,y,z].divP)
                        *Semiconductors[SC].C_Poisson;
 
@@ -667,9 +967,9 @@ implementation
       function dF1_dPhi(x,y,z:integer;aPhi,n,p:double):double;
       var px,py,pz:double;
           pxp1,pyp1,pzp1,pxm1,pym1,pzm1:double;
-          drho:double;
+          drho2,drho:double;
           PartX,PartY,PartZ:double;
-          SC:integer;
+          SC,SC1:integer;
           E_offset:double;
           Epsi1,Epsi2:double;
           Phi_quasi:double;
@@ -678,10 +978,8 @@ implementation
           Cfrac:double;
           IShift:integer;
           dQ_int_dPhi:double;
-          dQ_surf_dPhi:double;          
+          dQ_surf_dPhi:double;
       begin
-
-
         SC:=SpaceChargeArray[x,y,z].SCIndex;
         E_offset:=Semiconductors[SC].E_offset;
 
@@ -747,142 +1045,20 @@ implementation
           end;
 
         //Surface and Interface treatment
-        SurfCount:=SpaceChargeArray[x,y,z].SurfCount;
-        IntCount:=SpaceChargeArray[x,y,z].IntCount;
-
-        if SurfCount+IntCount=0 then
-          begin
-             result:=PartX+PartY+PartZ;
-             if SpaceChargeArray[x,y,z].Material=mSC then
-                drho:=dND_ionized_dPhi(Semiconductors[SC].E_F,aPhi+E_offset,SC)
-                     -dNA_ionized_dPhi(Semiconductors[SC].E_F,aPhi+E_offset,SC)
-             else drho:=0;
-             result:=result+drho*Semiconductors[SC].C_Poisson;
-             exit;
-          end 
-        else if SurfCount+IntCount>1 then
-          begin
-            PartX:=0;
-            PartY:=0;
-            PartZ:=0;
-            Cfrac:=0;
-          end
-        else
-          Cfrac:=1;
-
-        SurfX:=SpaceChargeArray[x,y,z].SurfX;
-        SurfY:=SpaceChargeArray[x,y,z].SurfY;
-        SurfZ:=SpaceChargeArray[x,y,z].SurfZ;
-        IntX:=SpaceChargeArray[x,y,z].IntX;
-        IntY:=SpaceChargeArray[x,y,z].IntY;
-        IntZ:=SpaceChargeArray[x,y,z].IntZ;
-
-        dQ_surf_dPhi:=0;
-
-        if SurfCount>0 then
-        begin
-           phi_quasi:=Semiconductors[SC].E_F-GetE_Fqn2(SC,aPhi+E_offset,n)-(aPhi+E_offset);
-           dQ_surf_dPhi:=-drho_surf_dPhi(phi_quasi,SC)*1e-18;
-        end;
-
-        if SurfX or IntX then
-        begin
-           Epsi1:=Epsi_vac;
-           Epsi2:=Epsi_vac;
-           if SpaceChargeArray[x+1,y,z].Material=mVac then IShift:=1 else IShift:=0;
-           if SpaceChargeArray[x+IShift,y,z].Material =mSC then
-               Epsi1:= Semiconductors[SpaceChargeArray[x+IShift,y,z].SCIndex].Epsi_semi;
-           if SpaceChargeArray[x-1+IShift,y,z].Material =mSC then
-               Epsi2:= Semiconductors[SpaceChargeArray[x-1+IShift,y,z].SCIndex].Epsi_semi;
-
-           if SurfX then dQ_int_dPhi:=dQ_surf_dPhi else dQ_int_dPhi:=0;
-           
-           if SurfCount+IntCount=1 then
-             begin
-               PartX:= ( -Epsi1/(pxp1-px)
-                         -Epsi2/(px-pxm1)
-                         +dQ_int_dPhi
-                         )/((Epsi1*(pxp1-px)+Epsi2*(px-pxm1))/2);
-               if SurfX then
-                 if SpaceChargeArray[x-1+IShift,y,z].Material=mVac then
-                    Cfrac:=Epsi1*(pxp1-px)/(Epsi1*(pxp1-px)+Epsi2*(px-pxm1))
-                 else
-                    Cfrac:=Epsi2*(px-pxm1)/(Epsi1*(pxp1-px)+Epsi2*(px-pxm1));
-             end
-           else
-             PartX:=   -Epsi1/(pxp1-px)
-                       -Epsi2/(px-pxm1)
-                       +dQ_int_dPhi;
-        end;
-
-        if SurfY or IntY then
-        begin
-           Epsi1:=Epsi_vac;
-           Epsi2:=Epsi_vac;
-           if SpaceChargeArray[x,y+1,z].Material=mVac then IShift:=1 else IShift:=0;
-           if SpaceChargeArray[x,y+IShift,z].Material =mSC then
-               Epsi1:= Semiconductors[SpaceChargeArray[x,y+IShift,z].SCIndex].Epsi_semi;
-           if SpaceChargeArray[x,y-1+IShift,z].Material =mSC then
-               Epsi2:= Semiconductors[SpaceChargeArray[x,y-1+IShift,z].SCIndex].Epsi_semi;
-
-           if SurfY then dQ_int_dPhi:=dQ_surf_dPhi else dQ_int_dPhi:=0;               
-               
-           if SurfCount+IntCount=1 then
-             begin
-               PartY:= ( -Epsi1/(pyp1-py)
-                         -Epsi2/(py-pym1)
-                         +dQ_int_dPhi
-                         )/((Epsi1*(pyp1-py)+Epsi2*(py-pym1))/2);
-               if SurfY then
-                 if SpaceChargeArray[x,y-1+IShift,z].Material=mVac then
-                    Cfrac:=Epsi1*(pyp1-py)/(Epsi1*(pyp1-py)+Epsi2*(py-pym1))
-                 else
-                    Cfrac:=Epsi2*(py-pym1)/(Epsi1*(pyp1-py)+Epsi2*(py-pym1));
-             end
-           else
-             PartY:=   -Epsi1/(pyp1-py)
-                       -Epsi2/(py-pym1)
-                       +dQ_int_dPhi;
-        end;
-
-        if SurfZ or IntZ then
-        begin
-           Epsi1:=Epsi_vac;
-           Epsi2:=Epsi_vac;
-           if SpaceChargeArray[x,y,z+1].Material=mVac then IShift:=1 else IShift:=0;
-           if SpaceChargeArray[x,y,z+IShift].Material =mSC then
-               Epsi1:= Semiconductors[SpaceChargeArray[x,y,z+IShift].SCIndex].Epsi_semi;
-           if SpaceChargeArray[x,y,z-1+IShift].Material =mSC then
-               Epsi2:= Semiconductors[SpaceChargeArray[x,y,z-1+IShift].SCIndex].Epsi_semi;
-
-           if SurfZ then dQ_int_dPhi:=dQ_surf_dPhi else dQ_int_dPhi:=0;
-               
-           if SurfCount+IntCount=1 then
-             begin
-               PartZ:= ( -Epsi1/(pzp1-pz)
-                         -Epsi2/(pz-pzm1)
-                         +dQ_int_dPhi
-                         )/((Epsi1*(pzp1-pz)+Epsi2*(pz-pzm1))/2);
-               if SurfZ then
-                 if SpaceChargeArray[x,y,z-1+IShift].Material=mVac then
-                    Cfrac:=Epsi1*(pzp1-pz)/(Epsi1*(pzp1-pz)+Epsi2*(pz-pzm1))
-                 else
-                    Cfrac:=Epsi2*(pz-pzm1)/(Epsi1*(pzp1-pz)+Epsi2*(pz-pzm1));
-             end
-           else
-             PartZ:=   -Epsi1/(pzp1-pz)
-                       -Epsi2/(pz-pzm1)
-                       +dQ_int_dPhi;
-        end;
-
-
-        result:=PartX+PartY+PartZ;
-        if (SpaceChargeArray[x,y,z].Material=mSC) and (Cfrac>0) then
+        if (SpaceChargeArray[x,y,z].Material=mSC) then
           drho:=dND_ionized_dPhi(Semiconductors[SC].E_F,aPhi+E_offset,SC)
                -dNA_ionized_dPhi(Semiconductors[SC].E_F,aPhi+E_offset,SC)
         else drho:=0;
 
-        drho:=drho*Cfrac;
+        SurfCount:=SpaceChargeArray[x,y,z].SurfCount;
+        IntCount:=SpaceChargeArray[x,y,z].IntCount;
+
+        if SurfCount+IntCount>0 then
+          dSurfaceAndInterfaces_dPhi(x,y,z,aPhi,n,p,E_Offset,px,py,pz,pxp1,pxm1,
+                               pyp1,pym1,pzp1,pzm1,SC,SurfCount,IntCount,
+                               PartX,PartY,PartZ,drho);
+
+        result:=PartX+PartY+PartZ;
         result:=result+drho*Semiconductors[SC].C_Poisson;
 
       end;
@@ -1425,6 +1601,43 @@ implementation
           SpaceChargeArray[x,y,z].dp  := 0;
       end;
 
+      procedure ChargeDensityOfAdjacentSemiconductor(x,y,z:integer; PreCalc:boolean);
+      var SC:integer;
+          Offset:double;
+          x2,y2,z2:integer;
+          E_Fqn,E_Fqp:double;
+      begin
+        if SpaceChargeArray[x,y,z].IntCount>1 then exit;
+        x2:=x; y2:=y; z2:=z;
+        if SpaceChargeArray[x,y,z].IntX then
+            x2:=x-1
+          else if SpaceChargeArray[x,y,z].IntY then
+            y2:=y-1
+          else
+            z2:=z-1;
+        SC:=SpaceChargeArray[x2,y2,z2].SCIndex;
+        Offset:=Semiconductors[SC].E_offset;
+        if PreCalc then
+          begin
+               SpaceChargeArray[x,y,z].Int_n_p[0] :=n(Semiconductors[SC].E_f,SpaceChargeArray[x,y,z].Phi+Offset,Semiconductors[SC].Inv_C,SC);
+               SpaceChargeArray[x,y,z].Int_n_p[1] :=p(Semiconductors[SC].E_f,SpaceChargeArray[x,y,z].Phi+Offset,Semiconductors[SC].Inv_V,SC);
+           end
+        else
+          begin
+               //Calculate E_Fqn and E_Fqp of adjecent semiconductor at x2,y2,z2, assuming it is the same for x,y,z:
+               E_Fqn:=GetE_Fqn2(SC,SpaceChargeArray[x2,y2,z2].Phi+Offset, SpaceChargeArray[x2,y2,z2].n);
+               E_Fqp:=GetE_Fqp2(SC,SpaceChargeArray[x2,y2,z2].Phi+Offset, SpaceChargeArray[x2,y2,z2].p);
+               //Calculate charge of adjecent semiconductor at x,y,z:
+               SpaceChargeArray[x,y,z].Int_n_p[0] :=n(E_Fqn,SpaceChargeArray[x,y,z].Phi+Offset,Semiconductors[SC].Inv_C,SC);
+               SpaceChargeArray[x,y,z].Int_n_p[1] :=p(E_Fqp,SpaceChargeArray[x,y,z].Phi+Offset,Semiconductors[SC].Inv_V,SC);
+           end;
+        SpaceChargeArray[x,y,z].Int_n_p[2] :=ND_ionized(Semiconductors[SC].E_F,SpaceChargeArray[x,y,z].Phi+Offset,SC);
+        SpaceChargeArray[x,y,z].Int_n_p[3] :=NA_ionized(Semiconductors[SC].E_F,SpaceChargeArray[x,y,z].Phi+Offset,SC);
+        SpaceChargeArray[x,y,z].Int_n_p[4] :=dND_ionized_dPhi(Semiconductors[SC].E_F,SpaceChargeArray[x,y,z].Phi+Offset,SC);
+        SpaceChargeArray[x,y,z].Int_n_p[5] :=dNA_ionized_dPhi(Semiconductors[SC].E_F,SpaceChargeArray[x,y,z].Phi+Offset,SC);
+      end;
+
+
       // Main iteration of Newton SOR method as described in [2] on p. xxx
       procedure Iterate;
       var   t_start:TDateTime;
@@ -1545,6 +1758,8 @@ implementation
                                   dw_k:=dw_k+(abs(SpaceChargeArray[x,y,z].dn)+abs(SpaceChargeArray[x,y,z].dp))*Nscale;
                                   w_k:=w_k+(abs(SpaceChargeArray[x,y,z].n)+abs(SpaceChargeArray[x,y,z].p))*Nscale;
                                 end;
+                              if SpaceChargeArray[x,y,z].IntCount>0 then
+                                 ChargeDensityOfAdjacentSemiconductor(x,y,z,PreCalc);
                               Phi_max:=max(abs(SpaceChargeArray[x,y,z].Phi),Phi_max);
                               C_max:=  max(abs(SpaceChargeArray[x,y,z].n),C_max);
                               C_max:=  max(abs(SpaceChargeArray[x,y,z].p),C_max);

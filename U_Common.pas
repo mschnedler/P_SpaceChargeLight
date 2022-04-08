@@ -37,6 +37,7 @@ type
           SCIndex: byte;               //Semiconductor index
           SurfX,SurfY,SurfZ:boolean ;  //surface indicator
           IntX,IntY,IntZ:boolean;      //intface indicator
+          Int_n_p: array of double;    // n and p of adjacent semiconductor at interface
           SurfCount,IntCount: integer; //surface and interface Count
           divP: double;                //constant value of divergence P in 1/nm^3 (devided by e)
        end;
