@@ -951,7 +951,7 @@ var
                  if SpaceChargeArray[x,y,z].Material=mSC then
                     begin
                       SC:=SpaceChargeArray[x,y,z].SCIndex;
-                      v:=ND_ionized(Semiconductors[SC].E_F, SpaceChargeArray[x,y,z].Phi+Semiconductors[SC].E_offset,SC);
+                      v:=ND_ionized(GetE_Fqn(SC,SpaceChargeArray[x,y,z].Phi+Semiconductors[SC].E_offset,SpaceChargeArray[x,y,z].n), SpaceChargeArray[x,y,z].Phi+Semiconductors[SC].E_offset,SC);
                       s:=v;
                     end
                  else
@@ -995,7 +995,7 @@ var
                  if SpaceChargeArray[x,y,z].Material=mSC then
                     begin
                       SC:=SpaceChargeArray[x,y,z].SCIndex;
-                      v:=NA_ionized(Semiconductors[SC].E_F, SpaceChargeArray[x,y,z].Phi+Semiconductors[SC].E_offset,SC);
+                      v:=NA_ionized(GetE_Fqp(SC,SpaceChargeArray[x,y,z].Phi+Semiconductors[SC].E_offset,SpaceChargeArray[x,y,z].p), SpaceChargeArray[x,y,z].Phi+Semiconductors[SC].E_offset,SC);
                       s:=v;
                     end
                  else
@@ -1339,19 +1339,17 @@ var
         Voltage_min,Voltage_max:double;
         x_central,y_central:integer;
         phi_s_central:double;
-        listr:string;
-        n_max,p_max,phi_max:double;
         SCbelowTip:integer;
-        PhiScale_SC:double;
 
 begin
 
         try
           output('Welcome to P_SpaceCharge!\n');
           output('=========================================================');
-          output('Program version = ' + ProgramVersion);
-          output('Author          = ' + 'Michael Schnedler');
-          output('Target OS       = ' + TargetOS);
+          output('Program version    = ' + ProgramVersion);
+          output('FDM solver version = ' + FDMSolver_Version);
+          output('Author             = ' + 'Michael Schnedler');
+          output('Target OS          = ' + TargetOS);
           output('=========================================================');
           sleep(500);
           output('\n');
@@ -1374,7 +1372,6 @@ begin
 
           Initialize_Semiconductors;
           ProgressNotification:=ProgressUpdate;
-
 
           NumVoltage:=length(V_List);
 

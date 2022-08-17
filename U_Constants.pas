@@ -2,7 +2,7 @@ unit U_Constants;
 
 interface
 const
-       ProgramVersion = '09/15/2020 (LaserLight V24 Quantum Polar FDMSolver)';
+       ProgramVersion = '08/11/2022 (V25, Extensions: Light, Quantum, Polar, FDMSolve, OhmicContact)';
        {$IFDEF FPC}
         TargetOS = {$I %FPCTARGETOS%};
        {$ELSE}

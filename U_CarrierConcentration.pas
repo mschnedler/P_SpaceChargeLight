@@ -1,7 +1,28 @@
 unit U_CarrierConcentration;
+// ********************************************************************
+// * Unit U_CarrierConcentration.pas                                  *
+// *                                                                  *
+// * Derivation of charge carrier densities in 2D and 3D,             *
+// * Fermi levels and Quasi Fermi levels.                             *
+// *                                                                  *
+// * Author:                                                          *
+// *                                                                  *
+// * Michael Schnedler                                                *
+// * Forschungszentrum Juelich GmbH                                   *
+// * Wilhelm-Johnen-Strasse                                           *
+// * 52428 Juelich                                                    *
+// *                                                                  *
+// * Please cite: 10.1103/PhysRevB.91.235305                          *
+// *              10.1103/PhysRevB.93.195444                          *
+// *                                                                  *
+// * Published under GNU General Public License v3.0                  *
+// ********************************************************************
 
 interface
 uses U_Constants, U_Common, SysUtils, Math;
+type
+  TE_Fqn_function = function(SC:integer; Phi:double;n:double):double;
+
 
   function  F_j(j:double;eta:double):double;
   procedure Init_FjList(Phi_Start,Phi_End:double; Count: integer);
@@ -22,15 +43,34 @@ uses U_Constants, U_Common, SysUtils, Math;
   function  GetRhoSurf(Phi:double;var rho:double; SC:integer):boolean;
   function  drho_surf_dPhi(Phi:double; SC:integer):double;
 
+  function GetE_Fqn1(SC:integer; Phi:double; n:double):double;
+  function GetE_Fqp1(SC:integer; Phi:double; p:double):double;
+
   function GetE_Fqn2(SC:integer; Phi:double; n:double):double;
   function GetE_Fqp2(SC:integer; Phi:double; p:double):double;
+
+var
+  GetE_Fqn: TE_Fqn_function;
+  GetE_Fqp: TE_Fqn_function;
 
 implementation
 
 
        // Bibliography
        //  [1] Seiwatz and Green, J. Appl. Phys. 29 (7), 1958
-
+       //  [2] Selberherr, "Analysis and Simulation of Semiconductor Devices",
+       //      ISBN 9783709187548, Springer (Wien, New York), 1984
+       //  [3] R. M. Feenstra, Semitip V6 source code,
+       //      http://www.andrew.cmu.edu/user/feenstra/semitip_v6/
+       //  [4] E. Fred Schubert, "Light-Emitting Diodes",
+       //      Second Edition, Cambridge University Press, 2006
+       //      ISBN 1139455222, 9781139455220
+       //  [5] D. Z. Garbuzov, "Reradiation effects, lifetimes and probabilities of
+       //      band-to-band transitions in direct A3B5 compounds of GaAs type"
+       //      Journal of Luminescence 27, 109-112 (1982)
+       //      ISSN 0022-2313
+       //      http://dx.doi.org/10.1016/0022-2313(82)90033-3
+       //  [6] W. B. Joyce and R. W. Dixon, Appl. Phys.Lett. 31, pp. 354 (1977)
 
        // *************************************************************************
        // ***  Carrier concentrations in parabolic band approx.                 ***
@@ -41,7 +81,6 @@ implementation
        begin
          result:= power(x,fp[0])/(1+exp(x-fp[1]));
        end;
-
        // Definition of the Fermi-Dirac Integral Fj(eta), see [1]:
        function F_j(j:double;eta:double):double;
        var fp:TFunctionParameters;
@@ -57,7 +96,7 @@ implementation
                if abs(j-3/2)<0.0001 then result:=result*3/2;
              end
            else
-             result:=integrate(F_j_int,fp,0,20+eta,Integration_Accuracy);  //IMPORTANT: IF THERE ARE
+             result:=integrate(F_j_int,fp,0,20+eta,1e-10);  //IMPORTANT: IF THERE ARE
          end;                                               //CONVERGENCE PROBLEMS IN THE
                                                             //POTENTIALDETERMINATION: SET
                                                             //THE UPPER LIMIT 20+eta TO HIGHER
@@ -88,40 +127,35 @@ implementation
         n2:=ceil(n);
         if (n1>=0) and (n2<FjList.Count) then
            begin
-             result:=FjList.Value[n1]*(n2-n)+FjList.Value[n2]*(n-n1);
+             result:=FjList.Value[n1]+(FjList.Value[n2]-FjList.Value[n1])*(n-n1);
            end
         else
-          result:=F_j(0.5,Phi/(k*T));
+          result:=F_j(0.5,Phi/kT);
       end;
-
        // Definition of n(E), the electrons in the conduction band
        // n returns the electron concentration in [1/nm^3]
        // Phi is given in Selberherr's sign convention
        function n(E_F,Phi:double;inv:boolean; SC:integer):double;
-       var c:double;
+       const  c1=6.81232110559823;
+              c2=1.1283791671;
        begin
            //*************************************************************************************************
-           //* c:=2/sqrt(Pi)*2*power(me/(2*Pi*h_bar*h_bar),1.5)*1e-27*power(eVToJ,1.5); // in eV^-1.5*nm^-3  *
-           //* In order to optimize computation time, we store the result of                                 *
+           //* c1:=2/sqrt(Pi)*2*power(me/(2*Pi*h_bar*h_bar),1.5)*1e-27*power(eVToJ,1.5); // in eV^-1.5*nm^-3 *
+           //* c2:=2/sqrt(Pi)                                                                                *
            //*************************************************************************************************
-           c:=6.81232110559823;
+
            if not inv then Phi:=0;
            if T=0 then
            begin
              if (E_F-Semiconductors[SC].E_g+Phi<0) then
                result:=0
              else
-               result:= 2*C/3*power(Semiconductors[SC].m_cb*(E_F-Semiconductors[SC].E_g+Phi),1.5);
+               result:= 2*c1/3*power(Semiconductors[SC].m_cb*(E_F-Semiconductors[SC].E_g+Phi),1.5);
              exit;
            end;
 
-           result:=C*power(Semiconductors[SC].m_cb*kb*T/eVToJ,1.5)*GetFromFjList(E_F-Semiconductors[SC].E_g+Phi);
-          // c:=2*me*kb*T/(h*h)*1e-18; //[1/nm^2]
-           //if not inv then result:=0
-           // else
-
-           //result:=4*Pi*power(Semiconductors[SC].m_cb*c,3/2)*GetFromFjList(E_F-Semiconductors[SC].E_g+Phi);
-           //result:=4*Pi*power(Semiconductors[SC].m_cb*c,3/2)*F_j(0.5,(E_F-Semiconductors[SC].E_g+Phi)/(k*T));
+           //n=2/sqrt(Pi)*N_C*Fj((E_F-E_C)/kT)
+           result:=c2*Semiconductors[SC].N_C*GetFromFjList(E_F-Semiconductors[SC].E_g+Phi);
        end;
 
 
@@ -129,26 +163,25 @@ implementation
        // p returns the hole concentration in [1/nm^3]
        // Phi is given in Selberherr's sign convention
        function p(E_F,Phi:double; inv:boolean; SC:integer):double;
-       var c:double;
+       const  c1=6.81232110559823;
+              c2=1.1283791671;
        begin
            //*************************************************************************************************
-           //* c:=2/sqrt(Pi)*2*power(me/(2*Pi*h_bar*h_bar),1.5)*1e-27*power(eVToJ,1.5); // in eV^-1.5*nm^-3  *
-           //* In order to optimize computation time, we store the result of                                 *
+           //* c1:=2/sqrt(Pi)*2*power(me/(2*Pi*h_bar*h_bar),1.5)*1e-27*power(eVToJ,1.5); // in eV^-1.5*nm^-3 *
+           //* c2:=2/sqrt(Pi)                                                                                *
            //*************************************************************************************************
-           c:=6.81232110559823;
            if not inv then Phi:=0;
            if T=0 then
            begin
              if (-Phi-E_F<=0) then
                result:=0
              else
-               result:= 2*C/3*power(Semiconductors[SC].m_vb*(-Phi-E_F),1.5);
+               result:= 2*c1/3*power(Semiconductors[SC].m_vb*(-Phi-E_F),1.5);
              exit;
            end;
-           result:=C*power(Semiconductors[SC].m_vb*kb*T/eVToJ,1.5)*GetFromFjList(-Phi-E_F);
-        //   c:=2*me*kb*T/(h*h)*1e-18; //[1/nm^2]
-        //   result:=4*Pi*power(Semiconductors[SC].m_vb*c,3/2)*GetFromFjList(-Phi-E_F);
-//           result:=4*Pi*power(Semiconductors[SC].m_vb*c,3/2)*F_j(0.5,(-Phi-E_F)/(k*T));
+
+           //p=2/sqrt(Pi)*N_V*Fj((E_V-E_F)/kT)
+           result:=c2*Semiconductors[SC].N_V*GetFromFjList(-Phi-E_F);
        end;
 
        // Definition of ionized donors, see[1]:
@@ -166,35 +199,36 @@ implementation
               result:=0;
             exit;
          end;
-         Expo:=Expo/(k*T);
+         Expo:=Expo/kT;
          if Expo<-40 then
             result:=Semiconductors[SC].C_ND
          else if Expo>40 then
             result:=0
          else
-            result:= Semiconductors[SC].C_ND * 1/(1+2*exp(Expo));
-
+            result:= Semiconductors[SC].C_ND /(1+2*exp(Expo));
        end;
-
        // Definition of the derivative of the ionized donors with respect to Phi
        // dND_ionized/dPhi in [1/(nm^3*eV)]
        // Phi is given in Selberherr's sign convention
        function dND_ionized_dPhi(E_F,Phi:double; SC:integer):double;
        var Expo:double;
+           C_ExpExpo:double;
        begin
          Expo:=E_F-Semiconductors[SC].E_D+Phi;
          if T=0 then
            result:=0
          else
            begin
-             Expo:=Expo/(k*T);
+             Expo:=Expo/kT;
              if (Expo<-40) or (Expo>40) then
                result:=0
              else
-               result:= - Semiconductors[SC].C_ND * 2 *exp(Expo)/(k*T*power(2*exp(Expo)+1,2));
+               begin
+                  C_ExpExpo:=2 *exp(Expo);
+                  result:= - Semiconductors[SC].C_ND * C_ExpExpo/(kT*power(C_ExpExpo+1,2));
+               end;
            end;
        end;
-
        // Definition of ionized acceptors, see[1]:
        // Returns the concentration of ionized acceptors in [1/nm^3]
        // Phi is given in Selberherr's sign convention
@@ -213,35 +247,36 @@ implementation
             result:=0;
           exit;
          end;
-         Expo:=Expo/(k*T);
+         Expo:=Expo/(kT);
          if Expo<-40 then
            result:=Semiconductors[SC].C_NA
          else if Expo>40 then
            result:=0
          else
-           result:= Semiconductors[SC].C_NA * 1/(1+4*exp(Expo));
-
+           result:= Semiconductors[SC].C_NA /(1+4*exp(Expo));
        end;
-
        // Definition of the derivative of the ionized acceptors with respect to Phi
        // dNA_ionized/dPhi in [1/(nm^3*eV)]
        // Phi is given in Selberherr's sign convention
        function dNA_ionized_dPhi(E_F,Phi:double; SC:integer):double;
        var Expo:double;
+           C_ExpExpo:double;
        begin
          Expo:=Semiconductors[SC].E_A-E_F-Phi;
          if T=0 then
            result:=0
          else
            begin
-             Expo:=Expo/(k*T);
+             Expo:=Expo/kT;
              if (Expo<-40) or (Expo>40) then
                result:=0
              else
-               result:=Semiconductors[SC].C_NA * 2 *exp(Expo)/(k*T*power(2*exp(Expo)+1,2));
+               begin
+                  C_ExpExpo:=2 *exp(Expo);
+                  result:=Semiconductors[SC].C_NA * C_ExpExpo/(kT*power(C_ExpExpo+1,2));
+               end;
            end;
        end;
-
        // Definition of the whole charge carrier concentration, see[1]
        // Returns the charge carrier concentration in [1/nm^3]
        function rho(E_F:double; Phi:double; invc, invv:boolean; SC:integer):double;
@@ -249,7 +284,6 @@ implementation
        begin
          n0:=n(E_F,Phi,invc,SC);
          p0:=p(E_F,Phi,invv,SC);
-
          result:=   (ND_ionized(E_F,Phi,SC)-
                      NA_ionized(E_F,Phi,SC)+
                      p0-
@@ -291,7 +325,6 @@ implementation
            output(format('Ionized acceptor concentration = %.5e nm^-3\n',[NA_ionized(result,0,SC)]));
            exit;
          end;
-
          setlength(Param,1);
          Param[0]:=SC;
          //T=0K:
@@ -334,14 +367,6 @@ implementation
              E_F_min:=E_F_max-2*dE;
            end;
 
-        { assignfile(tf,'test.txt');
-         rewrite(tf);
-         for i := 0 to 999 do
-          begin
-            curr_r:=rho(E_F_min+(E_F_max-E_F_min)/999*i,0,true,true,SC);
-            writeln(tf,floattostr(E_F_min+(E_F_max-E_F_min)/999*i)+', '+floattostr(curr_r)+', '+floattostr(NA_ionized(E_F_min+(E_F_max-E_F_min)/999*i,0,SC))+', '+floattostr(p(E_F_min+(E_F_max-E_F_min)/999*i,0,true, SC)));
-          end;
-         closefile(tf);}
          output('\nE_F for semiconductor '+inttostr(SC)+':');
          output(Format('Search interval: [%.5e eV, %.5e eV]',[E_F_min,E_F_max]));
          Num_Iter:= GoldenSectionInteration(rho_GS,param, E_F_min, E_F_max,Precision);
@@ -404,7 +429,6 @@ implementation
          E_SS:=p[2];
          result:=exp(-0.5*power((E-E_SS)/p[1],2));
        end;
-
        // Integration over Gaussian distribution
        // Returns the surface charge density in [C/m^2]
        // Integration from charge neutrality level E_CNL to E_F
@@ -438,7 +462,6 @@ implementation
            c:=-e*Semiconductors[SC].surface_charge_density/sqrt(2*Pi*w*w);
            result:=rho_prev+c*integrate(GaussDist,fp,Semiconductors[SC].E_F-Phi_prev,Semiconductors[SC].E_F-Phi,1e-10);
        end;
-
        // Definition of the derivative of the surface charge density with respect to Phi
        // drho_surf/dPhi in [C/(m^2*eV)]
        function drho_surf_dPhi(Phi:double; SC:integer):double;
@@ -452,7 +475,8 @@ implementation
 
 
 
-      // Initializing the surface charge density array.
+
+      // Initializing the surface charge density array.
       // Uses the procedure rho_surf, as described above.
       // An interval of 10 sigma around the surface state distribution is used.
       // The initial value of Phi_prev is choosen such, that the lower
@@ -472,10 +496,8 @@ implementation
          Semiconductors[SC].SurfRhoList.Phi_Start:=Phi_Start;
          Semiconductors[SC].SurfRhoList.Phi_End:=Phi_End;
          setlength(Semiconductors[SC].SurfRhoList.Value,Count);
-
          Phi_prev:=Semiconductors[SC].E_F-Semiconductors[SC].E_CNL;
          Rho_prev:=0;
-
          for i := 0 to Count-1 do
            begin
              if Semiconductors[SC].surface_charge_density=0 then
@@ -489,7 +511,6 @@ implementation
                 end;
            end;
       end;
-
       // Procedure for receiving the surface charge distribution for a given
       // Phi from the previously filled array. This procedure is used in the
       // latter finite-difference iteration to obtain the surface charge
@@ -504,21 +525,17 @@ implementation
           E:double;
       begin
         result:=true;
-
         if (Semiconductors[SC].surface_charge_density=0) or
            (Semiconductors[SC].SurfRhoList.Phi_Start=Semiconductors[SC].SurfRhoList.Phi_End) then
          begin
            rho:=0;
            exit;
          end;
-
         E:=Phi;
-
         n:=(Semiconductors[SC].SurfRhoList.Count-1)*(E-Semiconductors[SC].SurfRhoList.Phi_Start)/
            (Semiconductors[SC].SurfRhoList.Phi_End-Semiconductors[SC].SurfRhoList.Phi_Start);
         n1:=floor(n);
         n2:=ceil(n);
-
         if (n1<0) then
              rho:=Semiconductors[SC].SurfRhoList.Value[0]
         else if (n2>=Semiconductors[SC].SurfRhoList.Count) then
@@ -526,9 +543,7 @@ implementation
         else
              rho:=Semiconductors[SC].SurfRhoList.Value[n1]+
                   (Semiconductors[SC].SurfRhoList.Value[n2]-Semiconductors[SC].SurfRhoList.Value[n1])*(n-int(n));
-
       end;
-
 
       //Returns the Quasi-Fermi level for electrons.
       //Phi is defined in Selberherr notation.
@@ -543,29 +558,26 @@ implementation
       begin
            //Joyce-Dixon Approximation (see [6])
            //The Joyce-Dixon approximation is valid for all negative
-           //values of x as it asymptotes to the low temperature/low density
+           //values of ln(x) as it asymptotes to the low temperature/low density
            //limit but is only valid for positive values of x below about 5.
-           x:=n/Semiconductors[SC].N_C+1e-20;
 
-           if IsZero(x) then
-             begin
-               result:= Semiconductors[SC].E_F;//Semiconductors[SC].E_g-Phi-40*k*T;
-               exit;
-             end;
+           x:=n/Semiconductors[SC].N_C;
 
-           if x<8 then
+           if x=0 then
+              result:= (Semiconductors[SC].E_g-Phi)-100
+           else if x<8 then
             begin
               x2:=x*x;
               x3:=x2*x;
               x4:=x2*x2;
-              result:=(Semiconductors[SC].E_g-Phi)+k*T*(ln(x)+FDI_Coefficients[0]*x+FDI_Coefficients[1]*x2+FDI_Coefficients[2]*x3+FDI_Coefficients[3]*x4);
+              result:=(Semiconductors[SC].E_g-Phi)+kT*(ln(x)+FDI_Coefficients[0]*x+FDI_Coefficients[1]*x2+FDI_Coefficients[2]*x3+FDI_Coefficients[3]*x4);
 
               //Smooth/linear transition between both approximations (otherwise, m-iteration may not reach required convergence critera):
               if x>7 then
-                result:=result*(1-(x-7))+ ((Semiconductors[SC].E_g-Phi)+k*T*sqrt(power(3*sqrt(Pi)/4*x,4/3)-Pi*Pi/6)) * (x-7);
+                result:=result*(1-(x-7))+ ((Semiconductors[SC].E_g-Phi)+kT*sqrt(power(3*sqrt(Pi)/4*x,4/3)-Pi*Pi/6)) * (x-7);
             end
            else
-            result:=(Semiconductors[SC].E_g-Phi)+k*T*sqrt(power(3*sqrt(Pi)/4*x,4/3)-Pi*Pi/6);
+            result:=(Semiconductors[SC].E_g-Phi)+kT*sqrt(power(3*sqrt(Pi)/4*x,4/3)-Pi*Pi/6);
       end;
 
       //Returns the quasi-Fermi level for holes.
@@ -581,30 +593,42 @@ implementation
       begin
            // Joyce-Dixon Approximation (see [6])
            // The Joyce-Dixon approximation is valid for all negative
-           // values of x as it asymptotes to the low temperature/low density
+           // values of ln(x) as it asymptotes to the low temperature/low density
            // limit but is only valid for positive values of x below about 5.
 
-           x:=p/Semiconductors[SC].N_V+1e-20;
+           x:=p/Semiconductors[SC].N_V;
 
-           if IsZero(x) then
-             begin
-               result:= Semiconductors[SC].E_F;// -Phi+40*k*T;
-               exit;
-             end;
-
-
-           if x<8 then
+           if x=0 then
+              result:= (-Phi)+100
+           else if x<8 then
             begin
               x2:=x*x;
               x3:=x2*x;
               x4:=x2*x2;
-              result:=(-Phi)-k*T*(ln(x)+FDI_Coefficients[0]*x+FDI_Coefficients[1]*x2+FDI_Coefficients[2]*x3+FDI_Coefficients[3]*x4);
+              result:=(-Phi)-kT*(ln(x)+FDI_Coefficients[0]*x+FDI_Coefficients[1]*x2+FDI_Coefficients[2]*x3+FDI_Coefficients[3]*x4);
               //Smooth/linear transition between both approximations (otherwise, m-iteration may not reach required convergence critera):
               if x>7 then
-                result:=result*(1-(x-7))+ (-Phi-k*T*sqrt(power(3*sqrt(Pi)/4*x,4/3)-Pi*Pi/6)) * (x-7);
+                result:=result*(1-(x-7))+ (-Phi-kT*sqrt(power(3*sqrt(Pi)/4*x,4/3)-Pi*Pi/6)) * (x-7);
             end
            else
-            result:=(-Phi)-k*T*sqrt(power(3*sqrt(Pi)/4*x,4/3)-Pi*Pi/6);
+            result:=(-Phi)-kT*sqrt(power(3*sqrt(Pi)/4*x,4/3)-Pi*Pi/6);
+      end;
+
+
+
+      // Returns the quasi-Fermi level for electrons under the assumption of thermal equilibrium.
+      // In Thermal equilibrium, the quasi-Fermi level is equal to the E_F
+      function GetE_Fqn1(SC:integer; Phi:double; n:double):double;
+      begin
+        result:=Semiconductors[SC].E_f;
+      end;
+
+
+      // Returns the quasi-Fermi level for holes under the assumption of thermal equilibrium.
+      // In Thermal equilibrium, the quasi-Fermi level is equal to the E_F
+      function GetE_Fqp1(SC:integer; Phi:double; p:double):double;
+      begin
+        result:=Semiconductors[SC].E_f;
       end;
 
 

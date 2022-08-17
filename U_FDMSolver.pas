@@ -20,12 +20,15 @@ unit U_FDMSolver;
 interface
 
 uses
-  U_Constants,
-  U_Common,
-  U_CarrierConcentration,
-  Math,
-  System.DateUtils,
-  SysUtils;
+       U_Constants,
+       U_Common,
+       U_CarrierConcentration,
+       Math,
+       System.DateUtils,
+       SysUtils;
+
+const
+       FDMSolver_Version = '2 (08/11/2022)';
 
 type
        TGridPointArray=array of double;
@@ -55,6 +58,7 @@ var
        procedure AssignSC(x,y,z:integer;SC:integer);
        procedure AssignVacuum(x,y,z:integer);
        procedure AssignMetal(x,y,z:integer;Phi:double);
+       procedure AssignOhmic(x,y,z:integer;SC:integer; Phi:double);
 
        // Bibliography
        //  [1] Seiwatz and Green, J. Appl. Phys. 29 (7), 1958
@@ -97,7 +101,25 @@ implementation
          SpaceChargeArray[x,y,z].Polarisation.x:= Semiconductors[SC].Polarisation.x;
          SpaceChargeArray[x,y,z].Polarisation.y:= Semiconductors[SC].Polarisation.y;
          SpaceChargeArray[x,y,z].Polarisation.z:= Semiconductors[SC].Polarisation.z;
+         SpaceChargeArray[x,y,z].OhmicContact:=False;
       end;
+
+     procedure AssignOhmic(x,y,z:integer;SC:integer; Phi:double);
+     var C,nisq:double;
+     begin
+          SpaceChargeArray[x,y,z].OhmicContact:=True;
+          // Boundary condition of Ohmic Contact:
+          // Carrier concentrations are assumed to be in thermal equilibrium.
+          // See Eq. 5.1-12 / 5.1-13 in [2], which is, in our case,
+          // equal to:
+          SpaceChargeArray[x,y,z].Phi:=-(Semiconductors[SC].E_offset+Phi);
+          C:=ND_ionized(GetE_Fqn2(SC,SpaceChargeArray[x,y,z].Phi+Semiconductors[SC].E_offset,SpaceChargeArray[x,y,z].n),SpaceChargeArray[x,y,z].Phi+Semiconductors[SC].E_offset,SC)
+            -NA_ionized(GetE_Fqp2(SC,SpaceChargeArray[x,y,z].Phi+Semiconductors[SC].E_offset,SpaceChargeArray[x,y,z].p),SpaceChargeArray[x,y,z].Phi+Semiconductors[SC].E_offset,SC);
+          nisq:=Semiconductors[SC].n0*Semiconductors[SC].p0;
+          SpaceChargeArray[x,y,z].n:=0.5*(sqrt(C*C+4*nisq)+C);
+          SpaceChargeArray[x,y,z].p:=0.5*(sqrt(C*C+4*nisq)-C);
+
+     end;
 
       procedure AssignVacuum(x,y,z:integer);
       begin
@@ -160,9 +182,10 @@ implementation
           c           :double;
           n_max,p_max,phi_max:double;
       begin
+          kT:=k*T;
           Init_FjList(-5,5,10000);
           output('\nInitializing '+inttostr(Semiconductor_Count)+' semiconductors:\n');
-          c:=2*me*kb*T/(h*h)*1e-18; //[1/nm^2]
+          c:=2*Pi*me*kb*T/(h*h)*1e-18; //[1/nm^2]
           n_max:=0;
           p_max:=0;
           phi_max:=0;
@@ -171,6 +194,8 @@ implementation
                begin
                   C_ND:=N_D*1e-27;
                   C_NA:=N_A*1e-27;
+                  N_C:=2*power(Semiconductors[i].m_cb*c,3/2);
+                  N_V:=2*power(Semiconductors[i].m_vb*c,3/2);
                   if light_on then
                       G_photo:=alpha*P_opt/(E_ph*A_opt) // [1/(nm^3*s)]
                   else
@@ -178,8 +203,6 @@ implementation
                   Semiconductors[i].E_F:=Find_EF(i);
                   n0:=n(E_F,0,inv_c,i);
                   p0:=p(E_F,0,inv_v,i);
-                  N_C:=4*Pi*power(Semiconductors[i].m_cb*c,3/2);
-                  N_V:=4*Pi*power(Semiconductors[i].m_vb*c,3/2);
                   n_max:=max(n_max,n0);
                   p_max:=max(p_max,p0);
                   Dn:= mu_n*kb*T/e*1e18;
@@ -317,37 +340,41 @@ implementation
       end;
 
       function Gamma_n(SC:integer; Phi:double; n:double):double;
+      const
+          C=1.1283791671; // C=2/sqrt(Pi)
       var E_Fqn:double;
           eta_n:double;
           a,b:double;
       begin
-         E_Fqn:=GetE_Fqn2(SC,Phi,n);
-         eta_n:=(E_Fqn-(Semiconductors[SC].E_g-Phi))/(k*T);
+         E_Fqn:=GetE_Fqn(SC,Phi,n);
+         eta_n:=(E_Fqn-(Semiconductors[SC].E_g-Phi))/kT;
          if eta_n<-40 then
            begin
              result:=1;
              exit;
            end;
-         a:=GetFromFjList(eta_n*k*T);
+         a:=GetFromFjList(eta_n*kT);
          b:=exp(-eta_n);
-         result:=a*b*2/sqrt(Pi);
+         result:=a*b*C;
       end;
 
       function Gamma_p(SC:integer; Phi:double; p:double):double;
+      const
+          C=1.1283791671; // C=2/sqrt(Pi)
       var E_Fqp:double;
           eta_p:double;
           a,b:double;
       begin
-         E_Fqp:=GetE_Fqp2(SC,Phi,p);
-         eta_p:=((-Phi)-E_Fqp)/(k*T);
+         E_Fqp:=GetE_Fqp(SC,Phi,p);
+         eta_p:=((-Phi)-E_Fqp)/kT;
          if eta_p<-40 then
            begin
              result:=1;
              exit;
            end;
-         a:=GetFromFjList(eta_p*k*T);
+         a:=GetFromFjList(eta_p*kT);
          b:=exp(-eta_p);
-         result:=a*b*2/sqrt(Pi);
+         result:=a*b*C;
       end;
 
       function Phi_Gamma_n(x,y,z:integer; UsePhiNew:boolean = false):double;
@@ -372,14 +399,18 @@ implementation
       var SC:integer;
       begin
           SC:=SpaceChargeArray[x,y,z].SCIndex;
-          result:=k*T*ln(Gamma_n(SpaceChargeArray[x,y,z].SCIndex,SpaceChargeArray[x,y,z].Phi+Semiconductors[SC].E_Offset,SpaceChargeArray[x,y,z].n));
+          result:=kT*ln(Gamma_n(SpaceChargeArray[x,y,z].SCIndex,
+                                SpaceChargeArray[x,y,z].Phi+Semiconductors[SC].E_Offset,
+                                SpaceChargeArray[x,y,z].n));
       end;
 
       function Update_Phi_Gamma_p(x,y,z:integer):double;
       var SC:integer;
       begin
           SC:=SpaceChargeArray[x,y,z].SCIndex;
-          result:=-k*T*ln(Gamma_p(SpaceChargeArray[x,y,z].SCIndex,SpaceChargeArray[x,y,z].Phi+Semiconductors[SC].E_Offset,SpaceChargeArray[x,y,z].p));
+          result:=-kT*ln(Gamma_p(SpaceChargeArray[x,y,z].SCIndex,
+                                 SpaceChargeArray[x,y,z].Phi+Semiconductors[SC].E_Offset,
+                                 SpaceChargeArray[x,y,z].p));
       end;
 
 
@@ -436,8 +467,8 @@ implementation
                 SpaceChargeArray[x,y,z].IntZ:=IntZ;
                 SpaceChargeArray[x,y,z].SurfCount:=SurfCount;
                 SpaceChargeArray[x,y,z].IntCount:=IntCount;
-                if IntCount>0 then
-                   setlength(SpaceChargeArray[x,y,z].Int_n_p,6);
+               // if IntCount>0 then
+               //    setlength(SpaceChargeArray[x,y,z].Int_n_p,6);
               end;
 
       end;
@@ -519,7 +550,7 @@ implementation
         // Determination of surface state induced surface charge
         if SurfCount>0 then
         begin
-           phi_quasi:=Semiconductors[SC].E_F-GetE_Fqn2(SC,aPhi+E_offset,n)-(aPhi+E_offset);
+           phi_quasi:=Semiconductors[SC].E_F-GetE_Fqn(SC,aPhi+E_offset,n)-(aPhi+E_offset);
            if not GetRhoSurf(phi_quasi,Q_surf,SC) then output('out of rhosurflist.');
            Q_surf:=(e*Semiconductors[SC].Const_Surface_charge+Q_surf)*1e-18;
         end;
@@ -555,11 +586,7 @@ implementation
                     Cfrac:=Epsi2*(px-pxm1)/(Epsi1*(pxp1-px)+Epsi2*(px-pxm1));
                if IntX then
                  begin
-                    rho:= (pxp1-px)*rho;
-                    rho:=rho+(px-pxm1)*(-SpaceChargeArray[x,y,z].Int_n_p[0]
-                          +SpaceChargeArray[x,y,z].Int_n_p[1]
-                          +SpaceChargeArray[x,y,z].Int_n_p[2]
-                          -SpaceChargeArray[x,y,z].Int_n_p[3]);
+                    rho:= (pxp1-px)*rho + (px-pxm1)*rho;
                     rho:=rho/(Epsi1*(pxp1-px)+Epsi2*(px-pxm1))*e;
                     rho:=rho/Semiconductors[SC].C_Poisson;
                     Cfrac:=1;
@@ -603,11 +630,7 @@ implementation
                     Cfrac:=Epsi2*(py-pym1)/(Epsi1*(pyp1-py)+Epsi2*(py-pym1));
                if IntY then
                  begin
-                    rho:= (pyp1-py)*rho;
-                    rho:=rho+(py-pym1)*(-SpaceChargeArray[x,y,z].Int_n_p[0]
-                          +SpaceChargeArray[x,y,z].Int_n_p[1]
-                          +SpaceChargeArray[x,y,z].Int_n_p[2]
-                          -SpaceChargeArray[x,y,z].Int_n_p[3]);
+                    rho:= (pyp1-py)*rho+(py-pym1)*rho;
                     rho:=rho/(Epsi1*(pyp1-py)+Epsi2*(py-pym1))*e;
                     rho:=rho/Semiconductors[SC].C_Poisson;
                     Cfrac:=1;
@@ -651,11 +674,7 @@ implementation
                     Cfrac:=Epsi2*(pz-pzm1)/(Epsi1*(pzp1-pz)+Epsi2*(pz-pzm1));
                if IntZ then
                  begin
-                    rho:= (pzp1-pz)*rho;
-                    rho:=rho+(pz-pzm1)*(-SpaceChargeArray[x,y,z].Int_n_p[0]
-                          +SpaceChargeArray[x,y,z].Int_n_p[1]
-                          +SpaceChargeArray[x,y,z].Int_n_p[2]
-                          -SpaceChargeArray[x,y,z].Int_n_p[3]);
+                    rho:= (pzp1-pz)*rho+(pz-pzm1)*rho;
                     rho:=rho/(Epsi1*(pzp1-pz)+Epsi2*(pz-pzm1))*e;
                     rho:=rho/Semiconductors[SC].C_Poisson;
                     Cfrac:=1;
@@ -710,7 +729,7 @@ implementation
         // Determination of surface state induced surface charge
         if SurfCount>0 then
         begin
-           phi_quasi:=Semiconductors[SC].E_F-GetE_Fqn2(SC,aPhi+E_offset,n)-(aPhi+E_offset);
+           phi_quasi:=Semiconductors[SC].E_F-GetE_Fqn(SC,aPhi+E_offset,n)-(aPhi+E_offset);
            dQ_surf_dPhi:=-drho_surf_dPhi(phi_quasi,SC)*1e-18;
         end;
 
@@ -745,10 +764,7 @@ implementation
                     Cfrac:=Epsi2*(px-pxm1)/(Epsi1*(pxp1-px)+Epsi2*(px-pxm1));
                if IntX then
                  begin
-                    drho:= (pxp1-px)*drho;
-                    drho:=drho+(px-pxm1)*(
-                          SpaceChargeArray[x,y,z].Int_n_p[4]
-                          -SpaceChargeArray[x,y,z].Int_n_p[5]);
+                    drho:= (pxp1-px)*drho+(px-pxm1)*drho;
                     drho:=drho/(Epsi1*(pxp1-px)+Epsi2*(px-pxm1))*e;
                     drho:=drho/Semiconductors[SC].C_Poisson;
                     Cfrac:=1;
@@ -790,10 +806,7 @@ implementation
                     Cfrac:=Epsi2*(py-pym1)/(Epsi1*(pyp1-py)+Epsi2*(py-pym1));
                if IntY then
                  begin
-                    drho:= (pyp1-py)*drho;
-                    drho:=drho+(py-pym1)*(
-                          SpaceChargeArray[x,y,z].Int_n_p[4]
-                          -SpaceChargeArray[x,y,z].Int_n_p[5]);
+                    drho:= (pyp1-py)*drho+(py-pym1)*drho;
                     drho:=drho/(Epsi1*(pyp1-py)+Epsi2*(py-pym1))*e;
                     drho:=drho/Semiconductors[SC].C_Poisson;
                     Cfrac:=1;
@@ -835,10 +848,7 @@ implementation
                     Cfrac:=Epsi2*(pz-pzm1)/(Epsi1*(pzp1-pz)+Epsi2*(pz-pzm1));
                if IntZ then
                  begin
-                    drho:= (pzp1-pz)*drho;
-                    drho:=drho+(pz-pzm1)*(
-                           SpaceChargeArray[x,y,z].Int_n_p[4]
-                          -SpaceChargeArray[x,y,z].Int_n_p[5]);
+                    drho:= (pzp1-pz)*drho+(pz-pzm1)*drho;
                     drho:=drho/(Epsi1*(pzp1-pz)+Epsi2*(pz-pzm1))*e;
                     drho:=drho/Semiconductors[SC].C_Poisson;
                     Cfrac:=1;
@@ -938,8 +948,8 @@ implementation
           end;
 
         if SpaceChargeArray[x,y,z].Material=mSC then
-           rho:=-n+p+ND_ionized(Semiconductors[SC].E_F,aPhi+E_offset,SC)
-                -NA_ionized(Semiconductors[SC].E_F,aPhi+E_offset,SC)
+              rho:=-n+p+ND_ionized(GetE_Fqn(SC,aPhi+E_offset,n),aPhi+E_offset,SC)
+                   -NA_ionized(GetE_Fqp(SC,aPhi+E_offset,p),aPhi+E_offset,SC)
         else
            rho:=0;
 
@@ -1046,8 +1056,8 @@ implementation
 
         //Surface and Interface treatment
         if (SpaceChargeArray[x,y,z].Material=mSC) then
-          drho:=dND_ionized_dPhi(Semiconductors[SC].E_F,aPhi+E_offset,SC)
-               -dNA_ionized_dPhi(Semiconductors[SC].E_F,aPhi+E_offset,SC)
+          drho:=dND_ionized_dPhi(GetE_Fqn(SC,aPhi+E_offset,n),aPhi+E_offset,SC)
+               -dNA_ionized_dPhi(GetE_Fqp(SC,aPhi+E_offset,p),aPhi+E_offset,SC)
         else drho:=0;
 
         SurfCount:=SpaceChargeArray[x,y,z].SurfCount;
@@ -1601,43 +1611,6 @@ implementation
           SpaceChargeArray[x,y,z].dp  := 0;
       end;
 
-      procedure ChargeDensityOfAdjacentSemiconductor(x,y,z:integer; PreCalc:boolean);
-      var SC:integer;
-          Offset:double;
-          x2,y2,z2:integer;
-          E_Fqn,E_Fqp:double;
-      begin
-        if SpaceChargeArray[x,y,z].IntCount>1 then exit;
-        x2:=x; y2:=y; z2:=z;
-        if SpaceChargeArray[x,y,z].IntX then
-            x2:=x-1
-          else if SpaceChargeArray[x,y,z].IntY then
-            y2:=y-1
-          else
-            z2:=z-1;
-        SC:=SpaceChargeArray[x2,y2,z2].SCIndex;
-        Offset:=Semiconductors[SC].E_offset;
-        if PreCalc then
-          begin
-               SpaceChargeArray[x,y,z].Int_n_p[0] :=n(Semiconductors[SC].E_f,SpaceChargeArray[x,y,z].Phi+Offset,Semiconductors[SC].Inv_C,SC);
-               SpaceChargeArray[x,y,z].Int_n_p[1] :=p(Semiconductors[SC].E_f,SpaceChargeArray[x,y,z].Phi+Offset,Semiconductors[SC].Inv_V,SC);
-           end
-        else
-          begin
-               //Calculate E_Fqn and E_Fqp of adjecent semiconductor at x2,y2,z2, assuming it is the same for x,y,z:
-               E_Fqn:=GetE_Fqn2(SC,SpaceChargeArray[x2,y2,z2].Phi+Offset, SpaceChargeArray[x2,y2,z2].n);
-               E_Fqp:=GetE_Fqp2(SC,SpaceChargeArray[x2,y2,z2].Phi+Offset, SpaceChargeArray[x2,y2,z2].p);
-               //Calculate charge of adjecent semiconductor at x,y,z:
-               SpaceChargeArray[x,y,z].Int_n_p[0] :=n(E_Fqn,SpaceChargeArray[x,y,z].Phi+Offset,Semiconductors[SC].Inv_C,SC);
-               SpaceChargeArray[x,y,z].Int_n_p[1] :=p(E_Fqp,SpaceChargeArray[x,y,z].Phi+Offset,Semiconductors[SC].Inv_V,SC);
-           end;
-        SpaceChargeArray[x,y,z].Int_n_p[2] :=ND_ionized(Semiconductors[SC].E_F,SpaceChargeArray[x,y,z].Phi+Offset,SC);
-        SpaceChargeArray[x,y,z].Int_n_p[3] :=NA_ionized(Semiconductors[SC].E_F,SpaceChargeArray[x,y,z].Phi+Offset,SC);
-        SpaceChargeArray[x,y,z].Int_n_p[4] :=dND_ionized_dPhi(Semiconductors[SC].E_F,SpaceChargeArray[x,y,z].Phi+Offset,SC);
-        SpaceChargeArray[x,y,z].Int_n_p[5] :=dNA_ionized_dPhi(Semiconductors[SC].E_F,SpaceChargeArray[x,y,z].Phi+Offset,SC);
-      end;
-
-
       // Main iteration of Newton SOR method as described in [2] on p. xxx
       procedure Iterate;
       var   t_start:TDateTime;
@@ -1659,6 +1632,11 @@ implementation
       Prepare_Div_P;
 
       PreCalc:=true;
+      // Calculate the (Quasi)-Fermilevel under the assumption
+      // of thermal equilibrium (i.e. use E_F for both electrons and holes):
+      GetE_Fqn:=GetE_Fqn1;
+      GetE_Fqp:=GetE_Fqp1;
+
       epsilon:=1e-3;
       t_start:=now;
       k:=-1;
@@ -1673,7 +1651,7 @@ implementation
                  for x := 0 to NodeCount_x-1 do
                    for y := 0 to NodeCount_y-1 do
                      begin
-                       if SpaceChargeArray[x,y,z].Material=mSC then
+                       if ((SpaceChargeArray[x,y,z].Material=mSC) and (not SpaceChargeArray[x,y,z].OhmicContact)) then
                          begin
                             SpaceChargeArray[x,y,z].dF1dPhi:=1/dF1_dPhi(x,y,z,Phi(x,y,z),Get_N(x,y,z),Get_P(x,y,z));
                           if not Precalc then
@@ -1693,7 +1671,7 @@ implementation
                    for y := 0 to NodeCount_y-1 do
                      begin
                        m:=-1;
-                       if SpaceChargeArray[x,y,z].Material<>mMetal then
+                       if ((SpaceChargeArray[x,y,z].Material<>mMetal) and (not SpaceChargeArray[x,y,z].OhmicContact)) then
                         begin
                           repeat
                             inc(m);
@@ -1740,17 +1718,15 @@ implementation
                               dw_k:=dw_k+abs(SpaceChargeArray[x,y,z].dPhi)*PhiScale;
                               w_k:=w_k+abs(SpaceChargeArray[x,y,z].Phi+Offset)*PhiScale;
                             end;
-                          if (SpaceChargeArray[x,y,z].Material=mSC) then
+                          if ((SpaceChargeArray[x,y,z].Material=mSC) and (not SpaceChargeArray[x,y,z].OhmicContact)) then
                             begin
-                              if PreCalc then
+                              if PreCalc then //Precalc (i.e. without Continuity equations)
                                 begin
-                                  SCIndex:=SpaceChargeArray[x,y,z].SCIndex;
-                                  Offset:=Semiconductors[SCIndex].E_offset;
                                   SpaceChargeArray[x,y,z].n:=n(Semiconductors[SCIndex].E_f,SpaceChargeArray[x,y,z].Phi+Offset,Semiconductors[SCIndex].Inv_C,SCIndex);
                                   SpaceChargeArray[x,y,z].p:=p(Semiconductors[SCIndex].E_f,SpaceChargeArray[x,y,z].Phi+Offset,Semiconductors[SCIndex].Inv_V,SCIndex);
                                 end
                               else
-                                begin
+                                begin // (with continuity equations)
                                   SpaceChargeArray[x,y,z].n:=SpaceChargeArray[x,y,z].n+SpaceChargeArray[x,y,z].dn;
                                   SpaceChargeArray[x,y,z].p:=SpaceChargeArray[x,y,z].p+SpaceChargeArray[x,y,z].dp;
                                   SpaceChargeArray[x,y,z].Phi_Gamma_N:=SpaceChargeArray[x,y,z].Phi_Gamma_N+0.1*omega*(Update_Phi_Gamma_n(x,y,z)-SpaceChargeArray[x,y,z].Phi_Gamma_N);
@@ -1758,8 +1734,8 @@ implementation
                                   dw_k:=dw_k+(abs(SpaceChargeArray[x,y,z].dn)+abs(SpaceChargeArray[x,y,z].dp))*Nscale;
                                   w_k:=w_k+(abs(SpaceChargeArray[x,y,z].n)+abs(SpaceChargeArray[x,y,z].p))*Nscale;
                                 end;
-                              if SpaceChargeArray[x,y,z].IntCount>0 then
-                                 ChargeDensityOfAdjacentSemiconductor(x,y,z,PreCalc);
+                            //  if SpaceChargeArray[x,y,z].IntCount>0 then
+                              //   ChargeDensityOfAdjacentSemiconductor(x,y,z,PreCalc);
                               Phi_max:=max(abs(SpaceChargeArray[x,y,z].Phi),Phi_max);
                               C_max:=  max(abs(SpaceChargeArray[x,y,z].n),C_max);
                               C_max:=  max(abs(SpaceChargeArray[x,y,z].p),C_max);
@@ -1781,8 +1757,10 @@ implementation
                    PreCalc:=dw_k/w_k>dPhi_Grenz;//*1000;
                    if not PreCalc then
                      begin
-                        Output('\n\nCalculation of initial guess done. Adding light carriers and continuing...\n\n');
+                        Output('\n\nCalculation of system in thermal equilibrium done. Continuing with non-equilibrium.\n\n');
                         dw_k:=dw_k*10;
+                        GetE_Fqn:=GetE_Fqn2;
+                        GetE_Fqp:=GetE_Fqp2;
                         for x := 0 to NodeCount_x-1 do
                            for y := 0 to NodeCount_y-1 do
                                for z := 0 to NodeCount_z-1 do
@@ -1800,7 +1778,7 @@ implementation
                //routine for saving iterim solution:
                //SaveIterimSolution(k);
 
-               Phi_surf:=SpaceChargeArray[checkpoint_x,checkpoint_y,checkpoint_z].Phi; 
+               Phi_surf:=SpaceChargeArray[checkpoint_x,checkpoint_y,checkpoint_z].Phi;
                t_diff:=millisecondsbetween(t_start,now)*0.001;
                t_start:=now;
                if assigned(ProgressNotification) then

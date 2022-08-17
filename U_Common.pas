@@ -36,10 +36,11 @@ type
           Polarisation: TVec;          //Polarisation in 1/nm^2 (devided by e)
           SCIndex: byte;               //Semiconductor index
           SurfX,SurfY,SurfZ:boolean ;  //surface indicator
-          IntX,IntY,IntZ:boolean;      //intface indicator
-          Int_n_p: array of double;    // n and p of adjacent semiconductor at interface
+          IntX,IntY,IntZ:boolean;      //interface indicator
+          //Int_n_p: array of double;    // n and p of adjacent semiconductor at interface
           SurfCount,IntCount: integer; //surface and interface Count
           divP: double;                //constant value of divergence P in 1/nm^3 (devided by e)
+          OhmicContact: boolean;
        end;
 
        TRhoList=record
@@ -91,8 +92,6 @@ type
           C_NA:        double;       // Acceptor concentration in [1/nm^3]
           C_ND:        double;       // Donor concentration in [1/nm^3]
           SurfRhoList: TRhoList;     // Used to store Surf_rho(Phi) values to speed up calculation
-          n_List:      TRhoList;     // Used to store n(phi) values to speed up calculation
-          p_List:      TRhoList;     // Used to store p(phi) values to speed up calculation
           Inv_V:       boolean;      // allow inversion with holes in valence band (n-type)
           Inv_C:       boolean;      // allow inversion with electrons in conduction band (p-type)
           BandGapType: TBandGapType; // Defines, whether we are dealing with an direct or indirect band gap
@@ -104,15 +103,16 @@ type
 
        TSpaceChargeArray= array of array of array of TSpaceChargePoint;
 
-       function Integrate2(FunctionToIntegrate:TCommonFunction; Parameters:TFunctionParameters; From:double; Too:double;dx:double):double;
+       function  Integrate2(FunctionToIntegrate:TCommonFunction; Parameters:TFunctionParameters; From:double; Too:double;dx:double):double;
        function  Integrate(f:TCommonFunction; Parameters:TFunctionParameters; a:double; b:double; eps:double):double;
-       function GoldenSectionInteration(f:TCommonFunction; Parameters:TFunctionParameters; var a:double; var b:double; eps:double):integer;
+       function  GoldenSectionInteration(f:TCommonFunction; Parameters:TFunctionParameters; var a:double; var b:double; eps:double):integer;
        procedure Output(s:string);
        procedure SplitString(Str:String; Delimiter: string; var DelStrAry: TStringDynArray);
 
 var
        Semiconductors:      array of TSemiconductor;
        Semiconductor_Count: Integer;
+       kT:       double;       // k*T [eV]
        T:        double;       // Temperature in K
        d:        double;       // Tip-sample distance in m
        phi_m:    double;       // metal work function
@@ -188,6 +188,7 @@ implementation
          setlength(DelStrAry,n);
          DelStrAry[n-1]:=Str;
        end;
+
 
        // *********************************************************************
        // Lyness's Modified Adaptive Simpson's method for integration
