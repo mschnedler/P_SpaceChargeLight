@@ -2,7 +2,7 @@ unit U_Constants;
 
 interface
 const
-       ProgramVersion = '08/11/2022 (V25, Extensions: Light, Quantum, Polar, FDMSolve, OhmicContact)';
+       ProgramVersion = '05/02/2023 (V26, Extensions: Light, Quantum, Polar, FDMSolve, OhmicContact)';
        {$IFDEF FPC}
         TargetOS = {$I %FPCTARGETOS%};
        {$ELSE}
@@ -36,7 +36,7 @@ const
         //(3.53553e-1,   -4.95009e-3,   1.48386e-4,   -4.42563e-6);
        (3.53553390e-1,-4.95008973e-3,1.48385771e-4,-4.42563012e-6);
 
-       ParameterNames : array[0..74] of string = ('T','d','phi_m','epsi_s','chi',
+       ParameterNames : array[0..75] of string = ('T','d','phi_m','epsi_s','chi',
                                                  'm_cb','m_vb','E_g','N_D','N_A',
                                                  'E_D','E_A','Inv_V','Inv_C','P_x','P_y','P_z',
                                                  'stepwidth_z',
@@ -53,7 +53,7 @@ const
                                                   'refinement_steps','E_SS','E_CNL','FWHM',
                                                   'surface_charge_density','z_stop','mu_n',
                                                   'mu_p','P_opt','E_ph','A_opt','alpha',
-                                                  'tau','light_on',
+                                                  'tau_n','tau_p','light_on',
                                                   'Rho3D:output','Rho3D:n_filename',
                                                   'Rho3D:p_filename','Rho_central(z):output',
                                                   'Rho_central(z):filename',

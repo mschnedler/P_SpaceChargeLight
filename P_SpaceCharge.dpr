@@ -333,7 +333,13 @@ var
               if Semiconductor_Count<>length(sda) then
                 raise Exception.Create(ErrorMessages[0]);
               for k := 0  to Semiconductor_Count-1 do
-                Semiconductors[k].tau:=strtofloat(sda[k]); //s
+                Semiconductors[k].tau_n:=strtofloat(sda[k]); //s
+              inc(i);
+              SplitString(ParameterList[i],',',sda);
+              if Semiconductor_Count<>length(sda) then
+                raise Exception.Create(ErrorMessages[0]);
+              for k := 0  to Semiconductor_Count-1 do
+                Semiconductors[k].tau_p:=strtofloat(sda[k]); //s
               inc(i);
               SplitString(ParameterList[i],',',sda);
               if Semiconductor_Count<>length(sda) then

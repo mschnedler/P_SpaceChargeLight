@@ -28,7 +28,7 @@ uses
        SysUtils;
 
 const
-       FDMSolver_Version = '2 (08/11/2022)';
+       FDMSolver_Version = '3 (04/04/2023)';
 
 type
        TGridPointArray=array of double;
@@ -85,6 +85,133 @@ var
        //          4. Manually set SpaceChargeArray values
 
 implementation
+
+
+
+     // Derivation of Diffusion coefficient for electrons under impurity
+     // scattering, carrier-carrier scattering, and velocity saturation.
+     function Dn(x,y,z:integer):double;
+      var beta, vs, mu,mu_c,Ex,Ey,Ez:double;
+          SC:integer;
+          CI:double;
+          Cn_ref,Sn:double;
+      begin
+          //Comment out the following two lines to
+          //activate the spatial dependence of the diffusion coefficient:
+          result:=1;
+          exit;
+
+          SC:=SpaceChargeArray[x,y,z].SCIndex;
+          mu:=Semiconductors[SC].mu_n;
+
+          //ionized impurity scattering Eq. 4.1-23 from Ref [2] p. 87
+          CI:=abs(ND_ionized(GetE_Fqn2(SC,Phi(x,y,z), Get_N(x,y,z)),Phi(x,y,z),SC))
+             +abs(NA_ionized(GetE_Fqp2(SC,Phi(x,y,z), Get_P(x,y,z)),Phi(x,y,z),SC));
+          Cn_ref:=3e16*1e-21; //nm^-3
+          Sn:=350;
+          mu:=mu/sqrt(1+(CI/(Cn_ref+CI/Sn)));
+
+          // carrier-carrier scattering Eq. 4.1-31 from Ref [2] p. 90
+          mu_c:=1.428e20*1e-7/(sqrt(Get_N(x,y,z)*Get_P(x,y,z))*
+                ln(1+4.54e11*1e-14*power(Get_N(x,y,z)*Get_P(x,y,z),1/3)));
+          mu_c:=mu_c*1e-18;
+          mu:=1/(1/mu+1/mu_c);
+
+          // velocity saturation Eq. 4.1-48 from Ref [2] p. 95:
+          beta:=2;
+          vs:= 2.4e7/(1+0.8*exp(T/600))*1e7; // nm/s
+          if x=0 then
+            Ex:= (Phi(x+1,y,z)-Phi(x,y,z))/(px_array[x+1]-px_array[x])
+          else if x=NodeCount_x-1 then
+            Ex:= (Phi(x,y,z)-Phi(x-1,y,z))/(px_array[x]-px_array[x-1])
+          else
+            Ex:= (Phi(x+1,y,z)-Phi(x-1,y,z))/(px_array[x+1]-px_array[x-1]);
+
+          if y=0 then
+            Ey:= (Phi(x,y+1,z)-Phi(x,y,z))/(py_array[y+1]-py_array[y])
+          else if y=NodeCount_y-1 then
+            Ey:= (Phi(x,y,z)-Phi(x,y-1,z))/(py_array[y]-py_array[y-1])
+          else
+            Ey:= (Phi(x,y+1,z)-Phi(x,y-1,z))/(py_array[y+1]-py_array[y-1]);
+
+          if z=0 then
+            Ez:= (Phi(x,y,z+1)-Phi(x,y,z))/(pz_array[z+1]-pz_array[z])
+          else if z=NodeCount_z-1 then
+            Ez:= (Phi(x,y,z)-Phi(x,y,z-1))/(pz_array[z]-pz_array[z-1])
+          else
+            Ez:= (Phi(x,y,z+1)-Phi(x,y,z-1))/(pz_array[z+1]-pz_array[z-1]);
+
+          result:=kb*T/e*1e18*mu/power(1+power(1e18*mu*sqrt(Ex*Ex+Ey*Ey+Ez*Ez)/vs,beta),1/beta);
+          result:=result/Semiconductors[SC].Dn;
+      end;
+
+
+     // Derivation of Diffusion coefficient for holes under impurity
+     // scattering, carrier-carrier scattering, and velocity saturation.
+     function Dp(x,y,z:integer):double;
+     var beta, vs, mu,Ex,Ey,Ez:double;
+          SC:integer;
+          CI,Cp_ref,Sp:Double;
+          mu_c:double;
+     begin
+          //Comment out the following two lines to
+          //activate the spatial dependence of the diffusion coefficient:
+          result:=1;
+          exit;
+
+          SC:=SpaceChargeArray[x,y,z].SCIndex;
+          mu:=Semiconductors[SC].mu_p;
+
+          //ionized impurity scattering Eq. 4.1-23 from Ref [2] p. 87
+          CI:=abs(ND_ionized(GetE_Fqn2(SC,Phi(x,y,z), Get_N(x,y,z)),Phi(x,y,z),SC))
+             +abs(NA_ionized(GetE_Fqp2(SC,Phi(x,y,z), Get_P(x,y,z)),Phi(x,y,z),SC));
+
+          Cp_ref:=4e16*1e-21; //nm^-3
+          Sp:=81;
+          mu:=mu/sqrt(1+(CI/(Cp_ref+CI/Sp)));
+
+
+          // carrier-carrier scattering Eq. 4.1-31 from Ref [2] p. 90
+          mu_c:=1.428e20*1e-7/(sqrt(Get_N(x,y,z)*Get_P(x,y,z))*
+                ln(1+4.54e11*1e-14*power(Get_N(x,y,z)*Get_P(x,y,z),1/3)));
+          mu_c:=mu_c*1e-18;
+
+          mu:=1/(1/mu+1/mu_c);
+
+          // velocity saturation Eq. 4.1-48 from Ref [2] p. 95:
+          beta:=1;
+          vs:= 2.4e7/(1+0.8*exp(T/600))*1e7; // nm/s
+          if x=0 then
+            Ex:= (Phi(x+1,y,z)-Phi(x,y,z))/(px_array[x+1]-px_array[x])
+          else if x=NodeCount_x-1 then
+            Ex:= (Phi(x,y,z)-Phi(x-1,y,z))/(px_array[x]-px_array[x-1])
+          else
+            Ex:= (Phi(x+1,y,z)-Phi(x-1,y,z))/(px_array[x+1]-px_array[x-1]);
+
+          if y=0 then
+            Ey:= (Phi(x,y+1,z)-Phi(x,y,z))/(py_array[y+1]-py_array[y])
+          else if y=NodeCount_y-1 then
+            Ey:= (Phi(x,y,z)-Phi(x,y-1,z))/(py_array[y]-py_array[y-1])
+          else
+            Ey:= (Phi(x,y+1,z)-Phi(x,y-1,z))/(py_array[y+1]-py_array[y-1]);
+
+          if z=0 then
+            Ez:= (Phi(x,y,z+1)-Phi(x,y,z))/(pz_array[z+1]-pz_array[z])
+          else if z=NodeCount_z-1 then
+            Ez:= (Phi(x,y,z)-Phi(x,y,z-1))/(pz_array[z]-pz_array[z-1])
+          else
+            Ez:= (Phi(x,y,z+1)-Phi(x,y,z-1))/(pz_array[z+1]-pz_array[z-1]);
+
+          result:=kb*T/e*1e18*mu/power(1+power(1e18*mu*sqrt(Ex*Ex+Ey*Ey+Ez*Ez)/vs,beta),1/beta);
+          result:=result/Semiconductors[SC].Dp;
+     end;
+
+
+      procedure Update_Diffusioncoefficients(x,y,z:integer);
+      begin
+          SpaceChargeArray[x,y,z].DiffN:=Dn(x,y,z);
+          SpaceChargeArray[x,y,z].DiffP:=Dp(x,y,z);
+      end;
 
       procedure AssignSC(x,y,z:integer;SC:integer);
       begin
@@ -203,31 +330,27 @@ implementation
                   Semiconductors[i].E_F:=Find_EF(i);
                   n0:=n(E_F,0,inv_c,i);
                   p0:=p(E_F,0,inv_v,i);
-                  n_max:=max(n_max,n0);
-                  p_max:=max(p_max,p0);
+                  n_max:=max(n_max,C_ND);
+                  p_max:=max(p_max,C_NA);
                   Dn:= mu_n*kb*T/e*1e18;
                   Dp:= mu_p*kb*T/e*1e18;
-                  // Previous definition of C_Rate:
-                  // C_Rate:=1/(n0+p0+G_Photo*tau)/tau;
-                  // Current definition of C_Rate:
                   // C_Rate is the Bimolecular Recombination Coefficient
                   // For a direct-band gap semiconductor, the following equation
                   // is used, as proposed by [4] and [5].
                   if (BandGapType=bgtDirect) and (T>0) then
-                     begin
-                       C_Rate:= 3e-10*power(300/T,3/2)*power(E_G/1.5,2) * 1e21; //in  [nm^3/s]
-                       // c_opt is calculated from the following condition for the
-                       // carrier-generation rate:
-                       // 0 = C_rate*((n0+c_opt)(p0+c_opt)-n0p0)-G_photo
-                       c_opt:=-(n0+p0)/2+sqrt(power((n0+p0)/2,2)+G_photo/C_Rate);
-                     end
+                       C_Rate:= 3e-10*power(300/T,3/2)*power(E_G/1.5,2) * 1e21 //in  [nm^3/s]
                   else
-                     begin
                        C_Rate:=0;
-                       c_opt:=0;
-                     end;
-                  C_Poisson:=e/(Epsi_0*Epsi_s)*1e9;
+                  //Auger recombination coefficients:
+                  c_auger_n:=2.8e-31 * 1e42;  // in [nm^6/s]
+                  c_auger_p:=0.99e-31 * 1e42; // in [nm^6/s]
+                  //Shockley Reed Hall recombination coefficients:
+                  nref_n:=3e17*1e-21; // [nm^-3] reference doping concentration
+                  nref_p:=3e17*1e-21; // [nm^-3] reference doping concentration
+                  tau_p:=tau_p0/(1+(N_D+N_A)*1e-27/nref_p);
+                  tau_n:=tau_n0/(1+(N_D+N_A)*1e-27/nref_n);
 
+                  C_Poisson:=e/(Epsi_0*Epsi_s)*1e9;
                   Epsi_semi :=Epsi_0*Epsi_s*1e-9;
                   Init_SurfRhoList(10000,i);
                end;
@@ -447,8 +570,8 @@ implementation
                 SurfZ:= (z>0) and (z<NodeCount_z-1) and (SpaceChargeArray[x,y,z].Material=mSC);
                 IntZ:=SurfZ;
                 SurfZ:=SurfZ  and
-                        ((SpaceChargeArray[x,y,z-1].Material=mVac) or
-                         (SpaceChargeArray[x,y,z+1].Material=mVac));
+                        ((SpaceChargeArray[x,y,z-1].Material<>mSC) or
+                         (SpaceChargeArray[x,y,z+1].Material<>mSC));
                 IntZ:=IntZ and
                         (SpaceChargeArray[x,y,z-1].Material=mSC) and
                         (SpaceChargeArray[x,y,z-1].SCIndex<>SpaceChargeArray[x,y,z].SCIndex);
@@ -1100,9 +1223,34 @@ implementation
       // Result is given in [1/(nm^3*s)].
       function Rate(x,y,z:integer;aPhi,n,p:double):double;
       var SC:integer;
+          ni,f:double;
+          r_radiative,r_auger,r_srh:double;
+          tau_p,tau_n:double;
+          c_auger_n,c_auger_p:double;
       begin
         SC:=SpaceChargeArray[x,y,z].SCIndex;
-        result:=Semiconductors[SC].C_Rate*(n*p-Semiconductors[SC].n0*Semiconductors[SC].p0)-Semiconductors[SC].G_Photo;
+        ni:=sqrt(Semiconductors[SC].n0*Semiconductors[SC].p0);
+
+        // Optical generation/recombination
+        r_radiative:= Semiconductors[SC].C_Rate*(n*p-ni*ni)
+                     -Semiconductors[SC].G_Photo;
+
+        // Shockley-Read-Hall recombination
+        tau_p:=Semiconductors[SC].tau_p;
+        tau_n:=Semiconductors[SC].tau_n;
+        f:= (tau_p*(n+ni)+tau_n*(p+ni));
+        if abs(f)>0 then
+          r_srh:=(n*p-ni*ni)/f
+        else
+          r_srh:=0;
+
+        // Auger recombination
+        c_auger_n:=Semiconductors[SC].c_auger_n; // [nm^6/s]
+        c_auger_p:=Semiconductors[SC].c_auger_p; // [nm^6/s]
+
+        r_auger:=(c_auger_n*n+c_auger_p*p)*(n*p-ni*ni);
+
+        result:= r_radiative+r_srh+r_auger;
       end;
 
       // Derivation of the Generation/Recombination rate at integer position x,y,z
@@ -1111,10 +1259,32 @@ implementation
       // Result is given in [1/s].
       function d_Rate_dn(x,y,z:integer;aphi,n,p:double):double;
       var SC:integer;
+          ni,f:double;
+          r_radiative,r_auger,r_srh:double;
+          tau_p,tau_n:double;
+          c_auger_n,c_auger_p:double;
       begin
         SC:=SpaceChargeArray[x,y,z].SCIndex;
-        result:=Semiconductors[SC].C_Rate*p;
+        ni:=sqrt(Semiconductors[SC].n0*Semiconductors[SC].p0);
 
+        // Optical generation/recombination
+        r_radiative:=Semiconductors[SC].C_Rate*p;
+
+        // Shockley-Read-Hall recombination
+        tau_p:=Semiconductors[SC].tau_p;
+        tau_n:=Semiconductors[SC].tau_n;
+        f:= power(p*tau_n+ni*(tau_p+tau_n)+tau_p*n,2);
+        if abs(f)>0 then
+          r_srh:=(p+ni)*(p*tau_n+ni*tau_p)/f
+        else
+          r_srh:=0;
+
+        //Auger recombination
+        c_auger_n:=Semiconductors[SC].c_auger_n; // [nm^6/s]
+        c_auger_p:=Semiconductors[SC].c_auger_p; // [nm^6/s]
+        r_auger:= c_auger_n*(2*p*n+ni*ni)+c_auger_p*p*p;
+
+        result:= r_radiative+r_srh+r_auger;
       end;
 
       // Derivation of the Generation/Recombination rate at integer position x,y,z
@@ -1123,9 +1293,32 @@ implementation
       // Result is given in [1/s].
       function d_Rate_dp(x,y,z:integer;aphi,n,p:double):double;
       var SC:integer;
+          ni,f:double;
+          r_radiative,r_auger,r_srh:double;
+          tau_p,tau_n:double;
+          c_auger_n,c_auger_p:double;
       begin
         SC:=SpaceChargeArray[x,y,z].SCIndex;
-        result:=Semiconductors[SC].C_Rate*n;
+        ni:=sqrt(Semiconductors[SC].n0*Semiconductors[SC].p0);
+
+        // Optical generation/recombination
+        r_radiative:=Semiconductors[SC].C_Rate*p;
+
+        // Shockley-Read-Hall recombination
+        tau_p:=Semiconductors[SC].tau_p;
+        tau_n:=Semiconductors[SC].tau_n;
+        f:=power(n*tau_p+ni*(tau_p+tau_n)+tau_n*p,2);
+        if abs(f)>0 then
+          r_srh:=(n+ni)*(n*tau_p+ni*tau_n)/f
+        else
+          r_srh:=0;
+
+        //Auger recombination
+        c_auger_n:=Semiconductors[SC].c_auger_n; // [nm^6/s]
+        c_auger_p:=Semiconductors[SC].c_auger_p; // [nm^6/s]
+        r_auger:= c_auger_p*(2*n*p+ni*ni)+c_auger_n*n*n;
+
+        result:= r_radiative+r_srh+r_auger;
       end;
 
       // Continuity equation for electrons such, that F2(Phi,n,p) = 0,
@@ -1136,6 +1329,7 @@ implementation
           PartX,PartY,PartZ:double;
           SC:integer;
           Gamma1,Gamma2:double;
+          Dn1,Dn2:double;
       begin
 
          SC:=SpaceChargeArray[x,y,z].SCIndex;
@@ -1144,22 +1338,26 @@ implementation
          pz:=pz_array[z];
 
          if (x=NodeCount_x-1) or
-            (SpaceChargeArray[x+1,y,z].Material=mVac) then
+            (SpaceChargeArray[x+1,y,z].Material<>mSC) then
              begin
                pxm1:=px_array[x-1];
                Gamma1:=(Phi_Gamma_n(x-1,y,z,true)-aPhi)*C_kT;
-               PartX:= 2*   ( B(Gamma1)*Get_N(x-1,y,z)
-                             -B(-Gamma1)*n
-                            )/((px-pxm1)*(px-pxm1))
+               Dn1   := (SpaceChargeArray[x-1,y,z].DiffN+
+                         SpaceChargeArray[x,y,z].DiffN)*0.5;
+               PartX:= 2*Dn1*( B(Gamma1)*Get_N(x-1,y,z)
+                              -B(-Gamma1)*n
+                             )/((px-pxm1)*(px-pxm1))
              end
          else if (x=0) or
-                 (SpaceChargeArray[x-1,y,z].Material=mVac) then
+                 (SpaceChargeArray[x-1,y,z].Material<>mSC) then
              begin
                pxp1:=px_array[x+1];
                Gamma1:= (aPhi-Phi_Gamma_n(x+1,y,z,true))*C_kT;
-               PartX:= -2*   ( B(Gamma1)*n
-                              -B(-Gamma1)*Get_N(x+1,y,z)
-                             )/((pxp1-px)*(pxp1-px))
+               Dn1   := (SpaceChargeArray[x,y,z].DiffN+
+                         SpaceChargeArray[x+1,y,z].DiffN)*0.5;
+               PartX:= -2*Dn1*( B(Gamma1)*n
+                               -B(-Gamma1)*Get_N(x+1,y,z)
+                              )/((pxp1-px)*(pxp1-px))
              end
          else
              begin
@@ -1167,31 +1365,40 @@ implementation
                pxp1:=px_array[x+1];
                Gamma1:= (Phi_Gamma_n(x+1,y,z,true)-aPhi)*C_kT;
                Gamma2:= (aPhi-Phi_Gamma_n(x-1,y,z,true))*C_kT;
-               PartX:=    ( B(Gamma1)*Get_N(x+1,y,z)
+               Dn1   := (SpaceChargeArray[x+1,y,z].DiffN+
+                         SpaceChargeArray[x,y,z].DiffN)*0.5;
+               Dn2   := (SpaceChargeArray[x,y,z].DiffN+
+                         SpaceChargeArray[x-1,y,z].DiffN)*0.5;
+               PartX:=
+                       Dn1*(B(Gamma1)*Get_N(x+1,y,z)
                            -B(-Gamma1)*n
-                          )/((pxp1-px)*(pxp1-pxm1)* 0.5 )
-                       -   ( B(Gamma2)*n
+                           )/((pxp1-px)*(pxp1-pxm1)* 0.5 )
+                      -Dn2*( B(Gamma2)*n
                             -B(-Gamma2)*Get_N(x-1,y,z)
                            )/((px-pxm1)*(pxp1-pxm1)* 0.5);
              end;
 
          if (y=NodeCount_y-1) or
-            (SpaceChargeArray[x,y+1,z].Material=mVac) then
+            (SpaceChargeArray[x,y+1,z].Material<>mSC) then
              begin
                pym1:=py_array[y-1];
                Gamma1:=(Phi_Gamma_n(x,y-1,z,true)-aPhi)*C_kT;
-               PartY:= 2*   ( B(Gamma1)*Get_N(x,y-1,z)
+               Dn1   := (SpaceChargeArray[x,y-1,z].DiffN+
+                         SpaceChargeArray[x,y,z].DiffN)*0.5;
+               PartY:= 2*Dn1*( B(Gamma1)*Get_N(x,y-1,z)
                              -B(-Gamma1)*n
                             )/((py-pym1)*(py-pym1))
              end
          else if (y=0) or
-                 (SpaceChargeArray[x,y-1,z].Material=mVac) then
+                 (SpaceChargeArray[x,y-1,z].Material<>mSC) then
              begin
                pyp1:=py_array[y+1];
                Gamma1:=(aPhi-Phi_Gamma_n(x,y+1,z,true))*C_kT;
-               PartY:= -2*   ( B(Gamma1)*n
-                              -B(-Gamma1)*Get_N(x,y+1,z)
-                             )/((pyp1-py)*(pyp1-py))
+               Dn1   := (SpaceChargeArray[x,y,z].DiffN+
+                         SpaceChargeArray[x,y+1,z].DiffN)*0.5;
+               PartY:= -2*Dn1*( B(Gamma1)*n
+                               -B(-Gamma1)*Get_N(x,y+1,z)
+                              )/((pyp1-py)*(pyp1-py))
              end
          else
              begin
@@ -1199,31 +1406,40 @@ implementation
                pyp1:=py_array[y+1];
                Gamma1:= (Phi_Gamma_n(x,y+1,z,true)-aPhi)*C_kT;
                Gamma2:= (aPhi-Phi_Gamma_n(x,y-1,z,true))*C_kT;
-               PartY:=    ( B(Gamma1)*Get_N(x,y+1,z)
+               Dn1   := (SpaceChargeArray[x,y+1,z].DiffN+
+                         SpaceChargeArray[x,y,z].DiffN)*0.5;
+               Dn2   := (SpaceChargeArray[x,y,z].DiffN+
+                         SpaceChargeArray[x,y-1,z].DiffN)*0.5;
+
+               PartY:=Dn1*( B(Gamma1)*Get_N(x,y+1,z)
                            -B(-Gamma1)*n
                           )/((pyp1-py)*(pyp1-pym1)* 0.5 )
-                       -   ( B(Gamma2)*n
+                     -Dn2*( B(Gamma2)*n
                             -B(-Gamma2)*Get_N(x,y-1,z)
                            )/((py-pym1)*(pyp1-pym1)* 0.5 );
              end;
 
          if (z=NodeCount_z-1) or
-            (SpaceChargeArray[x,y,z+1].Material=mVac) then
+            (SpaceChargeArray[x,y,z+1].Material<>mSC) then
              begin
                pzm1:=pz_array[z-1];
                Gamma1:=(Phi_Gamma_n(x,y,z-1,true)-aPhi)*C_kT;
-               PartZ:= 2*   ( B(Gamma1)*Get_N(x,y,z-1)
-                             -B(-Gamma1)*n
-                            )/((pz-pzm1)*(pz-pzm1))
+               Dn1   := (SpaceChargeArray[x,y,z].DiffN+
+                         SpaceChargeArray[x,y,z-1].DiffN)*0.5;
+               PartZ:= 2*Dn1*( B(Gamma1)*Get_N(x,y,z-1)
+                              -B(-Gamma1)*n
+                             )/((pz-pzm1)*(pz-pzm1))
              end
          else if (z=0) or
-                 (SpaceChargeArray[x,y,z-1].Material=mVac) then
+                 (SpaceChargeArray[x,y,z-1].Material<>mSC) then
              begin
                pzp1:=pz_array[z+1];
                Gamma1:=(aPhi-Phi_Gamma_n(x,y,z+1,true))*C_kT;
-               PartZ:= -2*   ( B(Gamma1)*n
-                              -B(-Gamma1)*Get_N(x,y,z+1)
-                             )/((pzp1-pz)*(pzp1-pz))
+               Dn1   := (SpaceChargeArray[x,y,z].DiffN+
+                         SpaceChargeArray[x,y,z+1].DiffN)*0.5;
+               PartZ:= -2*Dn1*( B(Gamma1)*n
+                               -B(-Gamma1)*Get_N(x,y,z+1)
+                              )/((pzp1-pz)*(pzp1-pz))
              end
          else
              begin
@@ -1231,15 +1447,21 @@ implementation
                pzp1:=pz_array[z+1];
                Gamma1:= (Phi_Gamma_n(x,y,z+1,true)-aPhi)*C_kT;
                Gamma2:= (aPhi-Phi_Gamma_n(x,y,z-1,true))*C_kT;
-               PartZ:=    ( B(Gamma1)*Get_N(x,y,z+1)
+               Dn1   := (SpaceChargeArray[x,y,z+1].DiffN+
+                         SpaceChargeArray[x,y,z].DiffN)*0.5;
+               Dn2   := (SpaceChargeArray[x,y,z].DiffN+
+                         SpaceChargeArray[x,y,z-1].DiffN)*0.5;
+               PartZ:=Dn1*( B(Gamma1)*Get_N(x,y,z+1)
                            -B(-Gamma1)*n
                           )/((pzp1-pz)*(pzp1-pzm1)* 0.5 )
-                       -   ( B(Gamma2)*n
-                            -B(-Gamma2)*Get_N(x,y,z-1)
-                           )/((pz-pzm1)*(pzp1-pzm1)* 0.5 );
+                     -Dn2*( B(Gamma2)*n
+                           -B(-Gamma2)*Get_N(x,y,z-1)
+                          )/((pz-pzm1)*(pzp1-pzm1)* 0.5 );
              end;
 
-        result:= Semiconductors[SC].Dn*(PartX + PartY + PartZ) - Rate(x,y,z,Phi(x,y,z),n,p);
+        result:= Semiconductors[SC].Dn*(PartX + PartY + PartZ) - Rate(x,y,z,aPhi,n,p);
+
+
       end;
 
 
@@ -1251,92 +1473,110 @@ implementation
          pxp1,pyp1,pzp1,pxm1,pym1,pzm1:double;
          PartX,PartY,PartZ:double;
          SC:integer;
+         Dn1,Dn2:double;
       begin
-
-         {result:=F2(x,y,z,aPhi,n+Semiconductors[SpaceChargeArray[x,y,z].SCIndex].n0*0.001,p)-
-                 F2(x,y,z,aPhi,n-Semiconductors[SpaceChargeArray[x,y,z].SCIndex].n0*0.001,p);
-         result:=result/(2*Semiconductors[SpaceChargeArray[x,y,z].SCIndex].n0*0.001);
-         exit;   }
-
          SC:=SpaceChargeArray[x,y,z].SCIndex;
          px:=px_array[x];
          py:=py_array[y];
          pz:=pz_array[z];
 
          if (x=NodeCount_x-1) or
-            (SpaceChargeArray[x+1,y,z].Material=mVac) then
+            (SpaceChargeArray[x+1,y,z].Material<>mSC) then
              begin
                pxm1:=px_array[x-1];
-               PartX:= 2*   (-B((aPhi-Phi_Gamma_n(x-1,y,z))*C_kT) // REMINDER: DO NOT
-                            )/((px-pxm1)*(px-pxm1))               // USE PHI_NEW HERE!
-             end                                                  // dF2_dn and
-         else if (x=0) or                                         // dF3_dn is called
-                 (SpaceChargeArray[x-1,y,z].Material=mVac)  then  //right after
-             begin                                                // Phi=Phi+dPhi
+               Dn1   := (SpaceChargeArray[x,y,z].DiffN+
+                         SpaceChargeArray[x-1,y,z].DiffN)*0.5;
+               PartX:= 2*Dn1*(-B((aPhi-Phi_Gamma_n(x-1,y,z))*C_kT) // REMINDER: DO NOT
+                             )/((px-pxm1)*(px-pxm1))               // USE PHI_NEW HERE!
+             end                                                   // dF2_dn and
+         else if (x=0) or                                          // dF3_dn is called
+                 (SpaceChargeArray[x-1,y,z].Material<>mSC)  then   //right after
+             begin                                                 // Phi=Phi+dPhi
                pxp1:=px_array[x+1];
-               PartX:= -2*   ( B((aPhi-Phi_Gamma_n(x+1,y,z))*C_kT)
-                             )/((pxp1-px)*(pxp1-px))
+               Dn1   := (SpaceChargeArray[x,y,z].DiffN+
+                         SpaceChargeArray[x+1,y,z].DiffN)*0.5;
+               PartX:= -2*Dn1*( B((aPhi-Phi_Gamma_n(x+1,y,z))*C_kT)
+                              )/((pxp1-px)*(pxp1-px))
              end
          else
              begin
                pxm1:=px_array[x-1];
                pxp1:=px_array[x+1];
-               PartX:=    (-B((aPhi-Phi_Gamma_n(x+1,y,z))*C_kT)
-                          )/((pxp1-px)*(pxp1-pxm1)* 0.5 )
-                       -   ( B((aPhi-Phi_Gamma_n(x-1,y,z))*C_kT)
-                           )/((px-pxm1)*(pxp1-pxm1)* 0.5);
+               Dn1   := (SpaceChargeArray[x,y,z].DiffN+
+                         SpaceChargeArray[x+1,y,z].DiffN)*0.5;
+               Dn2   := (SpaceChargeArray[x,y,z].DiffN+
+                         SpaceChargeArray[x-1,y,z].DiffN)*0.5;
+               PartX := Dn1*(-B((aPhi-Phi_Gamma_n(x+1,y,z))*C_kT)
+                            )/((pxp1-px)*(pxp1-pxm1)* 0.5 )
+                       -Dn2*( B((aPhi-Phi_Gamma_n(x-1,y,z))*C_kT)
+                            )/((px-pxm1)*(pxp1-pxm1)* 0.5);
              end;
 
          if (y=NodeCount_y-1) or
-            (SpaceChargeArray[x,y+1,z].Material=mVac) then
+            (SpaceChargeArray[x,y+1,z].Material<>mSC) then
              begin
                pym1:=py_array[y-1];
-               PartY:= 2*   (-B((aPhi-Phi_Gamma_n(x,y-1,z))*C_kT)
-                            )/((py-pym1)*(py-pym1))
+               Dn1   := (SpaceChargeArray[x,y,z].DiffN+
+                         SpaceChargeArray[x,y-1,z].DiffN)*0.5;
+               PartY:= 2*Dn1*(-B((aPhi-Phi_Gamma_n(x,y-1,z))*C_kT)
+                             )/((py-pym1)*(py-pym1))
              end
          else if (y=0) or
-                 ((SpaceChargeArray[x,y-1,z].Material=mVac) and
-                  (SpaceChargeArray[x,y,z].Material=mSC)) then
+                 (SpaceChargeArray[x,y-1,z].Material<>mSC) then
              begin
                pyp1:=py_array[y+1];
-               PartY:= -2*   ( B((aPhi-Phi_Gamma_n(x,y+1,z))*C_kT)
-                             )/((pyp1-py)*(pyp1-py))
+               Dn1   := (SpaceChargeArray[x,y,z].DiffN+
+                         SpaceChargeArray[x,y+1,z].DiffN)*0.5;
+               PartY:= -2*Dn1*( B((aPhi-Phi_Gamma_n(x,y+1,z))*C_kT)
+                              )/((pyp1-py)*(pyp1-py))
              end
          else
              begin
                pym1:=py_array[y-1];
                pyp1:=py_array[y+1];
-               PartY:=    (-B((aPhi-Phi_Gamma_n(x,y+1,z))*C_kT)
+               Dn1   := (SpaceChargeArray[x,y,z].DiffN+
+                         SpaceChargeArray[x,y+1,z].DiffN)*0.5;
+               Dn2   := (SpaceChargeArray[x,y,z].DiffN+
+                         SpaceChargeArray[x,y-1,z].DiffN)*0.5;
+               PartY:=Dn1*(-B((aPhi-Phi_Gamma_n(x,y+1,z))*C_kT)
                           )/((pyp1-py)*(pyp1-pym1)* 0.5 )
-                       -   ( B((aPhi-Phi_Gamma_n(x,y-1,z))*C_kT)
-                           )/((py-pym1)*(pyp1-pym1)* 0.5 );
+                     -Dn2*( B((aPhi-Phi_Gamma_n(x,y-1,z))*C_kT)
+                          )/((py-pym1)*(pyp1-pym1)* 0.5 );
              end;
 
          if (z=NodeCount_z-1) or
-            (SpaceChargeArray[x,y,z+1].Material=mVac) then
+            (SpaceChargeArray[x,y,z+1].Material<>mSC) then
              begin
                pzm1:=pz_array[z-1];
-               PartZ:= 2*   (-B((aPhi-Phi_Gamma_n(x,y,z-1))*C_kT)
-                            )/((pz-pzm1)*(pz-pzm1))
+               Dn1   := (SpaceChargeArray[x,y,z].DiffN+
+                         SpaceChargeArray[x,y,z-1].DiffN)*0.5;
+               PartZ:= 2*Dn1*(-B((aPhi-Phi_Gamma_n(x,y,z-1))*C_kT)
+                             )/((pz-pzm1)*(pz-pzm1))
              end
          else if (z=0) or
-                 (SpaceChargeArray[x,y,z-1].Material=mVac) then
+                 (SpaceChargeArray[x,y,z-1].Material<>mSC) then
              begin
                pzp1:=pz_array[z+1];
-               PartZ:= -2*   ( B((aPhi-Phi_Gamma_n(x,y,z+1))*C_kT)
-                             )/((pzp1-pz)*(pzp1-pz))
+               Dn1   := (SpaceChargeArray[x,y,z].DiffN+
+                         SpaceChargeArray[x,y,z+1].DiffN)*0.5;
+               PartZ:= -2*Dn1*( B((aPhi-Phi_Gamma_n(x,y,z+1))*C_kT)
+                              )/((pzp1-pz)*(pzp1-pz))
              end
          else
              begin
                pzm1:=pz_array[z-1];
                pzp1:=pz_array[z+1];
-               PartZ:=    (-B((aPhi-Phi_Gamma_n(x,y,z+1))*C_kT)
+               Dn1   := (SpaceChargeArray[x,y,z].DiffN+
+                         SpaceChargeArray[x,y,z+1].DiffN)*0.5;
+               Dn2   := (SpaceChargeArray[x,y,z].DiffN+
+                         SpaceChargeArray[x,y,z-1].DiffN)*0.5;
+               PartZ:=Dn1*(-B((aPhi-Phi_Gamma_n(x,y,z+1))*C_kT)
                           )/((pzp1-pz)*(pzp1-pzm1)* 0.5 )
-                       -   ( B((aPhi-Phi_Gamma_n(x,y,z-1))*C_kT)
-                           )/((pz-pzm1)*(pzp1-pzm1)* 0.5 );
+                     -Dn2*( B((aPhi-Phi_Gamma_n(x,y,z-1))*C_kT)
+                          )/((pz-pzm1)*(pzp1-pzm1)* 0.5 );
              end;
 
-        result:= Semiconductors[SC].Dn*(PartX + PartY + PartZ) - d_Rate_dn(x,y,z,Phi(x,y,z),n,p);
+        result:= Semiconductors[SC].Dn*(PartX + PartY + PartZ)-d_Rate_dn(x,y,z,aPhi,n,p);
 
       end;
 
@@ -1349,6 +1589,7 @@ implementation
           PartX,PartY,PartZ:double;
           SC:integer;
           Gamma1,Gamma2:double;
+          Dp1,Dp2:double;
       begin
 
          SC:=SpaceChargeArray[x,y,z].SCIndex;
@@ -1359,20 +1600,24 @@ implementation
 
 
          if (x=NodeCount_x-1) or
-            (SpaceChargeArray[x+1,y,z].Material=mVac) then
+            (SpaceChargeArray[x+1,y,z].Material<>mSC) then
             begin
               pxm1:=px_array[x-1];
               Gamma1:=(Phi_Gamma_p(x-1,y,z,true)-aPhi)*C_kT;
-              PartX := -2 *    ( B(Gamma1)*p
+              Dp1   := (SpaceChargeArray[x-1,y,z].DiffP+
+                        SpaceChargeArray[x,y,z].DiffP)*0.5;
+              PartX := -2 *Dp1*( B(Gamma1)*p
                                 -B(-Gamma1)*Get_P(x-1,y,z)
                                )/((px-pxm1)*(px-pxm1))
             end
          else if (x=0) or
-                 (SpaceChargeArray[x-1,y,z].Material=mVac) then
+                 (SpaceChargeArray[x-1,y,z].Material<>mSC) then
             begin
               pxp1:=px_array[x+1];
               Gamma1:=(aPhi-Phi_Gamma_p(x+1,y,z,true))*C_kT;
-              PartX := 2 *    ( B(Gamma1)*Get_P(x+1,y,z)
+              Dp1   := (SpaceChargeArray[x,y,z].DiffP+
+                        SpaceChargeArray[x+1,y,z].DiffP)*0.5;
+              PartX := 2 *Dp1*( B(Gamma1)*Get_P(x+1,y,z)
                                -B(-Gamma1)*p
                               )/((pxp1-px)*(pxp1-px))
             end
@@ -1382,30 +1627,38 @@ implementation
               pxp1:=px_array[x+1];
               Gamma1:=(aPhi-Phi_Gamma_p(x+1,y,z,true))*C_kT;
               Gamma2:=(Phi_Gamma_p(x-1,y,z,true)-aPhi)*C_kT;
+              Dp1   := (SpaceChargeArray[x,y,z].DiffP+
+                        SpaceChargeArray[x+1,y,z].DiffP)*0.5;
+              Dp2   := (SpaceChargeArray[x-1,y,z].DiffP+
+                        SpaceChargeArray[x,y,z].DiffP)*0.5;
 
-              PartX :=     ( B(Gamma1)*Get_P(x+1,y,z)
+              PartX :=Dp1* (B(Gamma1)*Get_P(x+1,y,z)
                             -B(-Gamma1)*p
                            )/((pxp1-px)*(pxp1-pxm1)* 0.5 )
-                       -   ( B(Gamma2)*p
+                     -Dp2* ( B(Gamma2)*p
                             -B(-Gamma2)*Get_P(x-1,y,z)
                            )/((px-pxm1)*(pxp1-pxm1)* 0.5 );
             end;
 
          if (y=NodeCount_y-1) or
-            (SpaceChargeArray[x,y+1,z].Material=mVac) then
+            (SpaceChargeArray[x,y+1,z].Material<>mSC) then
             begin
               pym1:=py_array[y-1];
               Gamma1:=(Phi_Gamma_p(x,y-1,z,true)-aPhi)*C_kT;
-              PartY := -2 *    ( B(Gamma1)*p
+              Dp1   := (SpaceChargeArray[x,y-1,z].DiffP+
+                        SpaceChargeArray[x,y,z].DiffP)*0.5;
+              PartY := -2 *Dp1*( B(Gamma1)*p
                                 -B(-Gamma1)*Get_P(x,y-1,z)
                                )/((py-pym1)*(py-pym1))
             end
          else if (y=0) or
-                 (SpaceChargeArray[x,y-1,z].Material=mVac) then
+                 (SpaceChargeArray[x,y-1,z].Material<>mSC) then
             begin
               pyp1:=py_array[y+1];
               Gamma1:=(aPhi-Phi_Gamma_p(x,y+1,z,true))*C_kT;
-              PartY := 2 *    ( B(Gamma1)*Get_P(x,y+1,z)
+              Dp1   := (SpaceChargeArray[x,y,z].DiffP+
+                        SpaceChargeArray[x,y+1,z].DiffP)*0.5;
+              PartY := 2 *Dp1*( B(Gamma1)*Get_P(x,y+1,z)
                                -B(-Gamma1)*p
                               )/((pyp1-py)*(pyp1-py))
             end
@@ -1415,29 +1668,37 @@ implementation
               pyp1:=py_array[y+1];
               Gamma1:=(aPhi-Phi_Gamma_p(x,y+1,z,true))*C_kT;
               Gamma2:=(Phi_Gamma_p(x,y-1,z,true)-aPhi)*C_kT;
-              PartY := +   ( B(Gamma1)*Get_P(x,y+1,z)
-                            -B(-Gamma1)*p
-                           )/((pyp1-py)*(pyp1-pym1)* 0.5 )
-                       -   ( B(Gamma2)*p
-                            -B(-Gamma2)*Get_P(x,y-1,z)
-                           )/((py-pym1)*(pyp1-pym1)* 0.5 );
+              Dp1   := (SpaceChargeArray[x,y,z].DiffP+
+                        SpaceChargeArray[x,y+1,z].DiffP)*0.5;
+              Dp2   := (SpaceChargeArray[x,y-1,z].DiffP+
+                        SpaceChargeArray[x,y,z].DiffP)*0.5;
+              PartY := +Dp1*( B(Gamma1)*Get_P(x,y+1,z)
+                             -B(-Gamma1)*p
+                            )/((pyp1-py)*(pyp1-pym1)* 0.5 )
+                       -Dp2*( B(Gamma2)*p
+                             -B(-Gamma2)*Get_P(x,y-1,z)
+                            )/((py-pym1)*(pyp1-pym1)* 0.5 );
             end;
 
          if (z=NodeCount_z-1) or
-            (SpaceChargeArray[x,y,z+1].Material=mVac) then
+            (SpaceChargeArray[x,y,z+1].Material<>mSC) then
             begin
               pzm1:=pz_array[z-1];
               Gamma1:=(Phi_Gamma_p(x,y,z-1,true)-aPhi)*C_kT;
-              PartZ := -2 *    ( B(Gamma1)*p
+              Dp1   := (SpaceChargeArray[x,y,z-1].DiffP+
+                        SpaceChargeArray[x,y,z].DiffP)*0.5;
+              PartZ := -2 *Dp1*( B(Gamma1)*p
                                 -B(-Gamma1)*Get_P(x,y,z-1)
                                )/((pz-pzm1)*(pz-pzm1))
             end
          else if (z=0) or
-                 (SpaceChargeArray[x,y,z-1].Material=mVac) then
+                 (SpaceChargeArray[x,y,z-1].Material<>mSC) then
             begin
               pzp1:=pz_array[z+1];
               Gamma1:= (aPhi-Phi_Gamma_p(x,y,z+1,true))*C_kT;
-              PartZ := 2 *    ( B(Gamma1)*Get_P(x,y,z+1)
+              Dp1   := (SpaceChargeArray[x,y,z].DiffP+
+                        SpaceChargeArray[x,y,z+1].DiffP)*0.5;
+              PartZ := 2 *Dp1*( B(Gamma1)*Get_P(x,y,z+1)
                                -B(-Gamma1)*p
                               )/((pzp1-pz)*(pzp1-pz))
             end
@@ -1447,15 +1708,19 @@ implementation
               pzp1:=pz_array[z+1];
               Gamma1:=(aPhi-Phi_Gamma_p(x,y,z+1,true))*C_kT;
               Gamma2:=(Phi_Gamma_p(x,y,z-1,true)-aPhi)*C_kT;
-              PartZ := +   ( B(Gamma1)*Get_P(x,y,z+1)
-                            -B(-Gamma1)*p
-                           )/((pzp1-pz)*(pzp1-pzm1)* 0.5 )
-                       -   ( B(Gamma2)*p
-                            -B(-Gamma2)*Get_P(x,y,z-1)
-                           )/((pz-pzm1)*(pzp1-pzm1)* 0.5 );
+              Dp1   := (SpaceChargeArray[x,y,z].DiffP+
+                        SpaceChargeArray[x,y,z+1].DiffP)*0.5;
+              Dp2   := (SpaceChargeArray[x,y,z-1].DiffP+
+                        SpaceChargeArray[x,y,z].DiffP)*0.5;
+              PartZ := +Dp1*( B(Gamma1)*Get_P(x,y,z+1)
+                             -B(-Gamma1)*p
+                            )/((pzp1-pz)*(pzp1-pzm1)* 0.5 )
+                       -Dp2*( B(Gamma2)*p
+                             -B(-Gamma2)*Get_P(x,y,z-1)
+                            )/((pz-pzm1)*(pzp1-pzm1)* 0.5 );
             end;
 
-         result:= Semiconductors[SC].Dp*(PartX + PartY + PartZ) - Rate(x,y,z,Phi(x,y,z),n,p);
+         result:= Semiconductors[SC].Dp*(PartX + PartY + PartZ) - Rate(x,y,z,aPhi,n,p);
 
       end;
 
@@ -1467,6 +1732,7 @@ implementation
           pxp1,pyp1,pzp1,pxm1,pym1,pzm1:double;
           PartX, PartY, PartZ: double;
           SC:integer;
+          Dp1,Dp2:double;
       begin
          SC:=SpaceChargeArray[x,y,z].SCIndex;
 
@@ -1475,78 +1741,102 @@ implementation
          pz:=pz_array[z];
 
          if (x=NodeCount_x-1) or
-            (SpaceChargeArray[x+1,y,z].Material=mVac) then
+            (SpaceChargeArray[x+1,y,z].Material<>mSC) then
             begin
               pxm1:=px_array[x-1];
-              PartX := -2 *    ( B((Phi_Gamma_p(x-1,y,z)-aPhi)*C_kT)
+              Dp1   := (SpaceChargeArray[x-1,y,z].DiffP+
+                        SpaceChargeArray[x,y,z].DiffP)*0.5;
+              PartX := -2 *Dp1*( B((Phi_Gamma_p(x-1,y,z)-aPhi)*C_kT)
                                )/((px-pxm1)*(px-pxm1))
             end
          else if (x=0) or
-                 (SpaceChargeArray[x-1,y,z].Material=mVac) then
+                 (SpaceChargeArray[x-1,y,z].Material<>mSC) then
             begin
               pxp1:=px_array[x+1];
-              PartX := 2 *    (-B((Phi_Gamma_p(x+1,y,z)-aPhi)*C_kT)
+              Dp1   := (SpaceChargeArray[x+1,y,z].DiffP+
+                        SpaceChargeArray[x,y,z].DiffP)*0.5;
+              PartX := 2 *Dp1*(-B((Phi_Gamma_p(x+1,y,z)-aPhi)*C_kT)
                               )/((pxp1-px)*(pxp1-px))
             end
          else
             begin
               pxm1:=px_array[x-1];
               pxp1:=px_array[x+1];
-              PartX :=     (-B((Phi_Gamma_p(x+1,y,z)-aPhi)*C_kT)
-                           )/((pxp1-px)*(pxp1-pxm1)* 0.5 )
-                       -   ( B((Phi_Gamma_p(x-1,y,z)-aPhi)*C_kT)
-                           )/((px-pxm1)*(pxp1-pxm1)* 0.5 );
+              Dp1   := (SpaceChargeArray[x+1,y,z].DiffP+
+                        SpaceChargeArray[x,y,z].DiffP)*0.5;
+              Dp2   := (SpaceChargeArray[x-1,y,z].DiffP+
+                        SpaceChargeArray[x,y,z].DiffP)*0.5;
+              PartX := Dp1* (-B((Phi_Gamma_p(x+1,y,z)-aPhi)*C_kT)
+                            )/((pxp1-px)*(pxp1-pxm1)* 0.5 )
+                      -Dp2* ( B((Phi_Gamma_p(x-1,y,z)-aPhi)*C_kT)
+                            )/((px-pxm1)*(pxp1-pxm1)* 0.5 );
             end;
 
          if (y=NodeCount_y-1) or
-            (SpaceChargeArray[x,y+1,z].Material=mVac) then
+            (SpaceChargeArray[x,y+1,z].Material<>mSC) then
             begin
               pym1:=py_array[y-1];
-              PartY := -2 *    ( B((Phi_Gamma_p(x,y-1,z)-aPhi)*C_kT)
+              Dp1   := (SpaceChargeArray[x,y-1,z].DiffP+
+                        SpaceChargeArray[x,y,z].DiffP)*0.5;
+              PartY := -2 *Dp1*( B((Phi_Gamma_p(x,y-1,z)-aPhi)*C_kT)
                                )/((py-pym1)*(py-pym1))
             end
          else if (y=0) or
-                 (SpaceChargeArray[x,y-1,z].Material=mVac) then
+                 (SpaceChargeArray[x,y-1,z].Material<>mSC) then
             begin
               pyp1:=py_array[y+1];
-              PartY := 2 *    (-B((Phi_Gamma_p(x,y+1,z)-aPhi)*C_kT)
+              Dp1   := (SpaceChargeArray[x,y+1,z].DiffP+
+                        SpaceChargeArray[x,y,z].DiffP)*0.5;
+              PartY := 2 *Dp1*(-B((Phi_Gamma_p(x,y+1,z)-aPhi)*C_kT)
                               )/((pyp1-py)*(pyp1-py))
             end
          else
             begin
               pym1:=py_array[y-1];
               pyp1:=py_array[y+1];
-              PartY := +   (-B((Phi_Gamma_p(x,y+1,z)-aPhi)*C_kT)
-                           )/((pyp1-py)*(pyp1-pym1)* 0.5 )
-                       -   ( B((Phi_Gamma_p(x,y-1,z)-aPhi)*C_kT)
-                           )/((py-pym1)*(pyp1-pym1)* 0.5 );
+              Dp1   := (SpaceChargeArray[x,y+1,z].DiffP+
+                        SpaceChargeArray[x,y,z].DiffP)*0.5;
+              Dp2   := (SpaceChargeArray[x,y-1,z].DiffP+
+                        SpaceChargeArray[x,y,z].DiffP)*0.5;
+              PartY := +Dp1*(-B((Phi_Gamma_p(x,y+1,z)-aPhi)*C_kT)
+                            )/((pyp1-py)*(pyp1-pym1)* 0.5 )
+                       -Dp2*( B((Phi_Gamma_p(x,y-1,z)-aPhi)*C_kT)
+                            )/((py-pym1)*(pyp1-pym1)* 0.5 );
             end;
 
          if (z=NodeCount_z-1) or
-            (SpaceChargeArray[x,y,z+1].Material=mVac) then
+            (SpaceChargeArray[x,y,z+1].Material<>mSC) then
             begin
               pzm1:=pz_array[z-1];
-              PartZ := -2 * ( B((Phi_Gamma_p(x,y,z-1)-aPhi)*C_kT)
+              Dp1   := (SpaceChargeArray[x,y,z-1].DiffP+
+                        SpaceChargeArray[x,y,z].DiffP)*0.5;
+              PartZ := -2 *Dp1*( B((Phi_Gamma_p(x,y,z-1)-aPhi)*C_kT)
                                )/((pz-pzm1)*(pz-pzm1))
             end
          else if (z=0) or
-                 (SpaceChargeArray[x,y,z-1].Material=mVac) then
+                 (SpaceChargeArray[x,y,z-1].Material<>mSC) then
             begin
               pzp1:=pz_array[z+1];
-              PartZ := 2 *    (-B((Phi_Gamma_p(x,y,z+1)-aPhi)*C_kT)
+              Dp1   := (SpaceChargeArray[x,y,z+1].DiffP+
+                        SpaceChargeArray[x,y,z].DiffP)*0.5;
+              PartZ := 2 *Dp1*(-B((Phi_Gamma_p(x,y,z+1)-aPhi)*C_kT)
                               )/((pzp1-pz)*(pzp1-pz))
             end
          else
             begin
               pzm1:=pz_array[z-1];
               pzp1:=pz_array[z+1];
-              PartZ := +   (-B((Phi_Gamma_p(x,y,z+1)-aPhi)*C_kT)
-                           )/((pzp1-pz)*(pzp1-pzm1)* 0.5 )
-                       -   ( B((Phi_Gamma_p(x,y,z-1)-aPhi)*C_kT)
-                           )/((pz-pzm1)*(pzp1-pzm1)* 0.5 );
+              Dp1   := (SpaceChargeArray[x,y,z+1].DiffP+
+                        SpaceChargeArray[x,y,z].DiffP)*0.5;
+              Dp2   := (SpaceChargeArray[x,y,z-1].DiffP+
+                        SpaceChargeArray[x,y,z].DiffP)*0.5;
+              PartZ := +Dp1*(-B((Phi_Gamma_p(x,y,z+1)-aPhi)*C_kT)
+                            )/((pzp1-pz)*(pzp1-pzm1)* 0.5 )
+                       -Dp2*( B((Phi_Gamma_p(x,y,z-1)-aPhi)*C_kT)
+                            )/((pz-pzm1)*(pzp1-pzm1)* 0.5 );
             end;
 
-         result:= Semiconductors[SC].Dp*(PartX + PartY + PartZ) - d_Rate_dp(x,y,z,Phi(x,y,z),n,p);
+         result:= Semiconductors[SC].Dp*(PartX + PartY + PartZ)- d_Rate_dp(x,y,z,aPhi,n,p);
       end;
 
 
@@ -1625,18 +1915,17 @@ implementation
             c_opt:double;
             d1,d2,d3:double;
             m_max:integer;
-            Phi_max,C_max:double;
+            d0:double;
+            dn_max,dp_max,dphi_max:double;
       begin
 
       DetectSurfacesAndInterfaces;
       Prepare_Div_P;
-
       PreCalc:=true;
       // Calculate the (Quasi)-Fermilevel under the assumption
       // of thermal equilibrium (i.e. use E_F for both electrons and holes):
       GetE_Fqn:=GetE_Fqn1;
       GetE_Fqp:=GetE_Fqp1;
-
       epsilon:=1e-3;
       t_start:=now;
       k:=-1;
@@ -1654,10 +1943,11 @@ implementation
                        if ((SpaceChargeArray[x,y,z].Material=mSC) and (not SpaceChargeArray[x,y,z].OhmicContact)) then
                          begin
                             SpaceChargeArray[x,y,z].dF1dPhi:=1/dF1_dPhi(x,y,z,Phi(x,y,z),Get_N(x,y,z),Get_P(x,y,z));
-                          if not Precalc then
+                            if not Precalc then
                             Begin
-                             SpaceChargeArray[x,y,z].dF2dn:=1/dF2_dn(x,y,z,Phi_Gamma_n(x,y,z),Get_N(x,y,z),Get_P(x,y,z));
-                             SpaceChargeArray[x,y,z].dF3dp:=1/dF3_dp(x,y,z,Phi_Gamma_p(x,y,z),Get_N(x,y,z),Get_P(x,y,z));
+                               Update_Diffusioncoefficients(x,y,z);
+                               SpaceChargeArray[x,y,z].dF2dn:=1/dF2_dn(x,y,z,Phi_Gamma_n(x,y,z),Get_N(x,y,z),Get_P(x,y,z));
+                               SpaceChargeArray[x,y,z].dF3dp:=1/dF3_dp(x,y,z,Phi_Gamma_p(x,y,z),Get_N(x,y,z),Get_P(x,y,z));
                             End;
                          end
                          else if SpaceChargeArray[x,y,z].Material=mVac then
@@ -1665,47 +1955,71 @@ implementation
                      end;
 
                m_max:=0;
+               m:=0;
+               repeat
+                   d1:=0; d2:=0; d3:=0;
+                   dp_max:= 0; dn_max:=0; dphi_max:=0;
+                   inc(m);
+                   for z := 0 to NodeCount_z-1  do
+                     for x := 0 to NodeCount_x-1 do
+                       for y := 0 to NodeCount_y-1 do
+                          if (SpaceChargeArray[x,y,z].Material<>mMetal) then
+                           begin
+                               d0:= SpaceChargeArray[x,y,z].dPhi;
+                               Newton_Phi(x,y,z);
+                               d0:=abs(SpaceChargeArray[x,y,z].dPhi-d0);
+                               if d1>d0 then
+                               begin
+                                  d1:=d0;
+                                  dphi_max:=SpaceChargeArray[x,y,z].dPhi;
+                               end;
+                           end;
 
-               for z := 0 to NodeCount_z-1  do
-                 for x := 0 to NodeCount_x-1 do
-                   for y := 0 to NodeCount_y-1 do
+                   if not PreCalc then
                      begin
-                       m:=-1;
-                       if ((SpaceChargeArray[x,y,z].Material<>mMetal) and (not SpaceChargeArray[x,y,z].OhmicContact)) then
-                        begin
-                          repeat
-                            inc(m);
-                            d1:=SpaceChargeArray[x,y,z].dPhi;
-                            d2:=0; d3:=0;
-                            Newton_Phi(x,y,z);
-                            d1:=abs(d1-SpaceChargeArray[x,y,z].dPhi);
-                            if (not PreCalc) and (SpaceChargeArray[x,y,z].Material=mSC) then
-                                 begin
-                                   d2:=SpaceChargeArray[x,y,z].dn;
-                                   d3:=SpaceChargeArray[x,y,z].dp;
+                       for z := 0 to NodeCount_z-1  do
+                         for x := 0 to NodeCount_x-1 do
+                           for y := 0 to NodeCount_y-1 do
+                              if SpaceChargeArray[x,y,z].Material=mSC then
+                                begin
+                                   d0:= SpaceChargeArray[x,y,z].dn;
                                    Newton_n(x,y,z);
-                                   Newton_p(x,y,z);
-                                   d2:=abs(d2-SpaceChargeArray[x,y,z].dn);
-                                   d3:=abs(d3-SpaceChargeArray[x,y,z].dp);
-                                 end;
-                           until (m>0) and ((d1<=abs(SpaceChargeArray[x,y,z].dPhi*epsilon)) or (abs(SpaceChargeArray[x,y,z].dPhi)*PhiScale<1e-10))
-                                       and ((d2<=abs(SpaceChargeArray[x,y,z].dn*epsilon)) or (abs(SpaceChargeArray[x,y,z].dn)*NScale<1e-10))
-                                       and ((d3<=abs(SpaceChargeArray[x,y,z].dp*epsilon)) or (abs(SpaceChargeArray[x,y,z].dp)*NScale<1e-10));
+                                   d0:=abs(SpaceChargeArray[x,y,z].dn-d0);
+                                   if d2>d0 then
+                                   begin
+                                      d2:=d0;
+                                      dn_max:=SpaceChargeArray[x,y,z].dn;
+                                   end;
+                                end;
 
-                           m_max:=max(m,m_max);
-                        end;
+                       for z := 0 to NodeCount_z-1  do
+                         for x := 0 to NodeCount_x-1 do
+                           for y := 0 to NodeCount_y-1 do
+                              if SpaceChargeArray[x,y,z].Material=mSC then
+                                begin
+                                   d0:= SpaceChargeArray[x,y,z].dp;
+                                   Newton_p(x,y,z);
+                                   d0:=abs(SpaceChargeArray[x,y,z].dp-d0);
+                                   if d3>d0 then
+                                   begin
+                                      d3:=d0;
+                                      dp_max:=SpaceChargeArray[x,y,z].dp;
+                                   end;
+                                end;
                      end;
+               until (m>0) and ((d1<=abs(dPhi_max*epsilon)) or (abs(dPhi_max)*PhiScale<1e-10))
+                           and ((d2<=abs(dn_max*epsilon)) or (abs(dn_max)*NScale<1e-10))
+                           and ((d3<=abs(dp_max*epsilon)) or (abs(dp_max)*NScale<1e-10));
+
 
               dw_k:=0;
               w_k:=0;
-
-              Phi_max:=0; C_max:=0;
 
               for z := 0 to NodeCount_z-1  do
                 for x := 0 to NodeCount_x-1 do
                   for y := 0 to NodeCount_y-1 do
                      begin
-                          if SpaceChargeArray[x,y,z].Material<>mMetal then
+                          if (SpaceChargeArray[x,y,z].Material<>mMetal)and (not SpaceChargeArray[x,y,z].OhmicContact) then
                             begin
                               if SpaceChargeArray[x,y,z].Material=mSC then
                                begin
@@ -1713,8 +2027,8 @@ implementation
                                  Offset:=Semiconductors[SCIndex].E_offset;
                                end
                               else
-                               Offset:=0;
-                              SpaceChargeArray[x,y,z].Phi:=SpaceChargeArray[x,y,z].Phi+SpaceChargeArray[x,y,z].dPhi;//*(PhiScale/NScale);
+                                Offset:=0;
+                              SpaceChargeArray[x,y,z].Phi:=SpaceChargeArray[x,y,z].Phi+SpaceChargeArray[x,y,z].dPhi;
                               dw_k:=dw_k+abs(SpaceChargeArray[x,y,z].dPhi)*PhiScale;
                               w_k:=w_k+abs(SpaceChargeArray[x,y,z].Phi+Offset)*PhiScale;
                             end;
@@ -1734,23 +2048,8 @@ implementation
                                   dw_k:=dw_k+(abs(SpaceChargeArray[x,y,z].dn)+abs(SpaceChargeArray[x,y,z].dp))*Nscale;
                                   w_k:=w_k+(abs(SpaceChargeArray[x,y,z].n)+abs(SpaceChargeArray[x,y,z].p))*Nscale;
                                 end;
-                            //  if SpaceChargeArray[x,y,z].IntCount>0 then
-                              //   ChargeDensityOfAdjacentSemiconductor(x,y,z,PreCalc);
-                              Phi_max:=max(abs(SpaceChargeArray[x,y,z].Phi),Phi_max);
-                              C_max:=  max(abs(SpaceChargeArray[x,y,z].n),C_max);
-                              C_max:=  max(abs(SpaceChargeArray[x,y,z].p),C_max);
                             end;
                      end;
-
-               {if abs(Phi_max)>0 then
-                  PhiScale:=1/Phi_max
-               else
-                  PhiScale:=1; }
-
-               if abs(C_max)>0 then
-                  NScale:=1/C_max
-               else
-                  NScale:=1;
 
                if PreCalc and (k>1) then
                  begin
@@ -1764,25 +2063,19 @@ implementation
                         for x := 0 to NodeCount_x-1 do
                            for y := 0 to NodeCount_y-1 do
                                for z := 0 to NodeCount_z-1 do
-                                  if (SpaceChargeArray[x,y,z].Material=mSC) then
+                                  if (SpaceChargeArray[x,y,z].Material=mSC) and (not SpaceChargeArray[x,y,z].OhmicContact) then
                                     begin
-                                       c_opt:=Semiconductors[SpaceChargeArray[x,y,z].SCIndex].c_opt;
-                                       SpaceChargeArray[x,y,z].n:=SpaceChargeArray[x,y,z].n+c_opt;
-                                       SpaceChargeArray[x,y,z].p:=SpaceChargeArray[x,y,z].p+c_opt;
                                        SpaceChargeArray[x,y,z].Phi_Gamma_N:=Update_Phi_Gamma_n(x,y,z);
                                        SpaceChargeArray[x,y,z].Phi_Gamma_P:=Update_Phi_Gamma_p(x,y,z);
                                     end;
                      end;
                  end;
 
-               //routine for saving iterim solution:
-               //SaveIterimSolution(k);
-
                Phi_surf:=SpaceChargeArray[checkpoint_x,checkpoint_y,checkpoint_z].Phi;
                t_diff:=millisecondsbetween(t_start,now)*0.001;
                t_start:=now;
                if assigned(ProgressNotification) then
-                 ProgressNotification(k,m_max,-Phi_surf,dw_k/w_k,t_diff);
+                 ProgressNotification(k,m,-Phi_surf,dw_k/w_k,t_diff);
 
            end;
 
@@ -1790,3 +2083,4 @@ implementation
 
 
 end.
+

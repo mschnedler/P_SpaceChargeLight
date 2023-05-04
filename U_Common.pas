@@ -40,7 +40,8 @@ type
           //Int_n_p: array of double;    // n and p of adjacent semiconductor at interface
           SurfCount,IntCount: integer; //surface and interface Count
           divP: double;                //constant value of divergence P in 1/nm^3 (devided by e)
-          OhmicContact: boolean;
+          OhmicContact: boolean      ; //Defines the type of Ohmic contact
+          DiffN,DiffP: double;         //local field dependent diffusion coefficient
        end;
 
        TRhoList=record
@@ -70,13 +71,17 @@ type
           Const_Surface_charge: double;    // constant, fixed charge at the surface in 1/m^2
           mu_n,mu_p:   double;       // Mobility of electrons and holes [m^2/(Vs)]
           n0,p0:       double;       // Electron and hole density (excluding light excited carriers in equilibrium) [1/nm^3]
-          c_opt:       double;       // Electron / Hole density due to light excited carriers in equilibrium [1/nm^3]
           G_photo:     double;       // Generation rate of light excited carriers [1/(nm^3*s)]
           light_on:    boolean;      // Switch that "turns on the light".
+          c_auger_n:   double;       // Coefficient for Auger recombination (electrons) [nm^6/s]
+          c_auger_p:   double;       // Coefficient for Auger recombination (holes) [nm^6/s]
           P_opt, E_ph,
           A_opt, alpha,
-          tau:         double;       // Optical power of the laser [eV/s], photon energy [eV], Laser-spotsize [nm^2],
+          tau_n0,
+          tau_p0:      double;       // Electron and hole minority carrier lifetime (without distortions from ionized donors) [s]
+          tau_n,tau_p: double;       // Optical power of the laser [eV/s], photon energy [eV], Laser-spotsize [nm^2],
                                      // Absorption coefficient of semiconductor [1/nm], minority carrier lifetime of semiconductor [s]
+          nref_n, nref_p: double;    // [nm^-3] reference doping concentration for derivation of actual minority carrier lifetimes
           E_CNL:       double;       // Charge neutrality level  [eV]
           E_SS:        double;       // Peak position of the surface state distribution [eV]
                                      // NOTE:    E_CNL and E_SS are DEFINIED RELATIVE TO THE SURFACE VALENCE BAND EDGE,
