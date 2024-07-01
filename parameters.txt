@@ -23,9 +23,9 @@ E_D    = 1.4142                      # Energy of donor level  [eV] (E_g - 0.0058
 E_A    = 0.028                       # Energy of acceptor level [eV]
 Inv_V  = true                        # allow inversion with holes in valence band (n-type)
 Inv_C  = true                        # allow inversion with electrons in conduction band (p-type)
-P_x = 0
-P_y = 0
-P_z = 0
+P_x = 0                              # Polarization field of the semiconductor in x direction [1/nm^2]
+P_y = 0                              # Polarization field of the semiconductor in y direction [1/nm^2]
+P_z = 0                              # Polarization field of the semiconductor in z direction [1/nm^2]
 Interface_charge = 0
 Surface_charge = 0
 
@@ -84,15 +84,16 @@ z_stop         = 200                  # upper limit for z-integration in transmi
 
 # Light induced carriers
  
-mu_n           = 2400                  # Mobility of electrons [cm^2/Vs]
+mu_n           = 2400                 # Mobility of electrons [cm^2/Vs]
 mu_p           = 150                  # Mobility of holes [cm^2/Vs]
-P_opt          = 0.000015                # optical power of the laser [W]
+P_opt          = 0.000015             # optical power of the laser [W]
 E_ph           = 1.58                 # energy of a photon [eV]
 A_opt          = 150000000            # illuminated area [nm^2] 
                                       # standard value: 25000 x 25000 nm^2
 alpha          = 1e4                  # absorption coefficient [1/cm]
-tau            = 5e-9                 # minority charrier lifetime [s]
-light_on       = true                 # Switch for turning on the laser
+tau_n          = 5e-9                 # Electron lifetime [s]
+tau_p          = 5e-9                 # Hole lifetime [s]
+light_on       = false                # Switch for turning on the laser
 
 
 # Defining the surface state distribution

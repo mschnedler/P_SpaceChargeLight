@@ -28,7 +28,7 @@ uses
        SysUtils;
 
 const
-       FDMSolver_Version = '3 (04/04/2023)';
+       FDMSolver_Version = '4 (06/28/2024)';
 
 type
        TGridPointArray=array of double;
@@ -570,8 +570,8 @@ implementation
                 SurfZ:= (z>0) and (z<NodeCount_z-1) and (SpaceChargeArray[x,y,z].Material=mSC);
                 IntZ:=SurfZ;
                 SurfZ:=SurfZ  and
-                        ((SpaceChargeArray[x,y,z-1].Material<>mSC) or
-                         (SpaceChargeArray[x,y,z+1].Material<>mSC));
+                        ((SpaceChargeArray[x,y,z-1].Material=mVac) or
+                         (SpaceChargeArray[x,y,z+1].Material=mVac));
                 IntZ:=IntZ and
                         (SpaceChargeArray[x,y,z-1].Material=mSC) and
                         (SpaceChargeArray[x,y,z-1].SCIndex<>SpaceChargeArray[x,y,z].SCIndex);
@@ -2043,8 +2043,11 @@ implementation
                                 begin // (with continuity equations)
                                   SpaceChargeArray[x,y,z].n:=SpaceChargeArray[x,y,z].n+SpaceChargeArray[x,y,z].dn;
                                   SpaceChargeArray[x,y,z].p:=SpaceChargeArray[x,y,z].p+SpaceChargeArray[x,y,z].dp;
-                                  SpaceChargeArray[x,y,z].Phi_Gamma_N:=SpaceChargeArray[x,y,z].Phi_Gamma_N+0.1*omega*(Update_Phi_Gamma_n(x,y,z)-SpaceChargeArray[x,y,z].Phi_Gamma_N);
-                                  SpaceChargeArray[x,y,z].Phi_Gamma_P:=SpaceChargeArray[x,y,z].Phi_Gamma_P+0.1*omega*(Update_Phi_Gamma_p(x,y,z)-SpaceChargeArray[x,y,z].Phi_Gamma_P);
+                                  //SpaceChargeArray[x,y,z].Phi_Gamma_N:=SpaceChargeArray[x,y,z].Phi_Gamma_N+0.1*omega*(Update_Phi_Gamma_n(x,y,z)-SpaceChargeArray[x,y,z].Phi_Gamma_N);
+                                  //SpaceChargeArray[x,y,z].Phi_Gamma_P:=SpaceChargeArray[x,y,z].Phi_Gamma_P+0.1*omega*(Update_Phi_Gamma_p(x,y,z)-SpaceChargeArray[x,y,z].Phi_Gamma_P);
+                                  SpaceChargeArray[x,y,z].Phi_Gamma_N:=Update_Phi_Gamma_n(x,y,z);
+                                  SpaceChargeArray[x,y,z].Phi_Gamma_P:=Update_Phi_Gamma_p(x,y,z);
+
                                   dw_k:=dw_k+(abs(SpaceChargeArray[x,y,z].dn)+abs(SpaceChargeArray[x,y,z].dp))*Nscale;
                                   w_k:=w_k+(abs(SpaceChargeArray[x,y,z].n)+abs(SpaceChargeArray[x,y,z].p))*Nscale;
                                 end;
