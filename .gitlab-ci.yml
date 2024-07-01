@@ -13,7 +13,7 @@ deploy-to-github:
   - apt-get dist-upgrade -y
   - apt-get install -y git
   - mkdir --mode=700 ~/.ssh/
-  - (umask 0377 && echo "${GITHUB_DEPLOY_KEY}" > ~/.ssh/id_rsa
+  - (umask 0377 && echo "${GITHUB_DEPLOY_KEY_NEW}" > ~/.ssh/id_ed25519
                 && echo "github.com ${GITHUB_HOST_KEY_NEW}" >> ~/.ssh/known_hosts)
   - git clone --mirror "${CI_REPOSITORY_URL}" "${CI_PROJECT_NAME}_mirror"
   - cd "${CI_PROJECT_NAME}_mirror";
