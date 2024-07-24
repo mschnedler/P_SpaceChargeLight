@@ -332,6 +332,8 @@ implementation
                   p0:=p(E_F,0,inv_v,i);
                   n_max:=max(n_max,C_ND);
                   p_max:=max(p_max,C_NA);
+                  n_max:=max(n_max,n0);
+                  p_max:=max(p_max,p0);
                   Dn:= mu_n*kb*T/e*1e18;
                   Dp:= mu_p*kb*T/e*1e18;
                   // C_Rate is the Bimolecular Recombination Coefficient
