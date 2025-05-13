@@ -2,7 +2,7 @@ unit U_Constants;
 
 interface
 const
-       ProgramVersion = '05/02/2023 (V26, Extensions: Light, Quantum, Polar, FDMSolve, OhmicContact)';
+       ProgramVersion = '10/18/2024 (V27, Extensions: Light, Quantum, Polar, FDMSolve, OhmicContact)';
        {$IFDEF FPC}
         TargetOS = {$I %FPCTARGETOS%};
        {$ELSE}
@@ -18,7 +18,6 @@ const
        {$ENDIF}
 
        Integration_Accuracy=1e-12;
-
        kb     = 1.38064852e-23;      // Boltzmann constant in J/K
        k      = 8.61733035e-05;        // Bolzmann constant in eV/K
        e      = 1.60217662e-19;       // Electron charge in C

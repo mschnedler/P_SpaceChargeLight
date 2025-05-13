@@ -37,7 +37,6 @@ type
           SCIndex: byte;               //Semiconductor index
           SurfX,SurfY,SurfZ:boolean ;  //surface indicator
           IntX,IntY,IntZ:boolean;      //interface indicator
-          //Int_n_p: array of double;    // n and p of adjacent semiconductor at interface
           SurfCount,IntCount: integer; //surface and interface Count
           divP: double;                //constant value of divergence P in 1/nm^3 (devided by e)
           OhmicContact: boolean      ; //Defines the type of Ohmic contact
@@ -50,6 +49,7 @@ type
          Phi_Start: double;
          Phi_End:   double;
        end;
+
 
        // Properties of the semiconductor:
        TSemiconductor= record
@@ -66,6 +66,8 @@ type
           Epsi_s:      double;       // dielectric constant of semiconductor
           Chi:         double;       // electron affinity of semiconductor
           E_f:         double;       // Fermi level
+          E_Fqn_steady:double;       // Steady state Quasi-Fermilevel of Electrons
+          E_Fqp_steady:double;       // Steady state Quasi-Fermilevel of Hole
           Interface_x: integer;      // right hand side interface of this semiconductor
           Const_Interface_charge: double;  // constant, fixed charge at the interface in 1/m^2
           Const_Surface_charge: double;    // constant, fixed charge at the surface in 1/m^2
@@ -115,6 +117,7 @@ type
        procedure SplitString(Str:String; Delimiter: string; var DelStrAry: TStringDynArray);
 
 var
+
        Semiconductors:      array of TSemiconductor;
        Semiconductor_Count: Integer;
        kT:       double;       // k*T [eV]
@@ -165,6 +168,7 @@ var
        Interim_solution_Phi_Quantum_p_filename: string; //filename for quantum potential of holes
        E_FQ_C,E_FQ_V: double;        //Quasi Fermilevels for conduction band and valence band at the point opposite to the tip apex
        FjList:      TRhoList;
+
 implementation
 
 

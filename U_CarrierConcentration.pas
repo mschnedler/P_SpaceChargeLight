@@ -49,6 +49,11 @@ type
   function GetE_Fqn2(SC:integer; Phi:double; n:double):double;
   function GetE_Fqp2(SC:integer; Phi:double; p:double):double;
 
+  function Rate(SC:integer;aPhi,n,p:double):double;
+  function d_Rate_dn(SC:integer;aphi,n,p:double):double;
+  function d_Rate_dp(SC:integer;aphi,n,p:double):double;
+  function Find_steady_state_concentrations(var n,p:double; SC_Index:integer):boolean;
+
 var
   GetE_Fqn: TE_Fqn_function;
   GetE_Fqp: TE_Fqn_function;
@@ -617,19 +622,173 @@ implementation
 
 
       // Returns the quasi-Fermi level for electrons under the assumption of thermal equilibrium.
-      // In Thermal equilibrium, the quasi-Fermi level is equal to the E_F
+      // In Thermal equilibrium, the quasi-Fermi level is equal to the E_F,
+      // under steady state condition, it is equal to the quasi Fermi level, which
+      // is a constant throughout the semiconductor
       function GetE_Fqn1(SC:integer; Phi:double; n:double):double;
       begin
-        result:=Semiconductors[SC].E_f;
+        result:=Semiconductors[SC].E_fqn_steady;
       end;
 
 
       // Returns the quasi-Fermi level for holes under the assumption of thermal equilibrium.
-      // In Thermal equilibrium, the quasi-Fermi level is equal to the E_F
+      // In Thermal equilibrium, the quasi-Fermi level is equal to the E_F,
+      // under steady state condition, it is equal to the quasi Fermi level, which
+      // is a constant throughout the semiconductor
       function GetE_Fqp1(SC:integer; Phi:double; p:double):double;
       begin
-        result:=Semiconductors[SC].E_f;
+        result:=Semiconductors[SC].E_fqp_steady;
       end;
+
+
+      // Generation/Recombination rate at the integer position x,y,z,
+      // including the generation of light excited carriers G_Photo.
+      // Result is given in [1/(nm^3*s)].
+      function Rate(SC:integer;aPhi,n,p:double):double;
+      var ni,f:double;
+          r_radiative,r_auger,r_srh:double;
+          tau_p,tau_n:double;
+          c_auger_n,c_auger_p:double;
+      begin
+        ni:=sqrt(Semiconductors[SC].n0*Semiconductors[SC].p0);
+
+        // Optical generation/recombination
+        r_radiative:= Semiconductors[SC].C_Rate*(n*p-ni*ni)
+                     -Semiconductors[SC].G_Photo;
+
+        // Shockley-Read-Hall recombination  (uncomment the next 7 lines for SRH recombination)
+        r_srh:=0;
+        //tau_p:=Semiconductors[SC].tau_p;
+        //tau_n:=Semiconductors[SC].tau_n;
+        //f:= (tau_p*(n+ni)+tau_n*(p+ni));
+        //if abs(f)>0 then
+        //  r_srh:=(n*p-ni*ni)/f
+        //else
+        //  r_srh:=0;
+
+        // Auger recombination (uncomment the next 3 lines for Auger recombination)
+        r_auger:=0;
+        //c_auger_n:=Semiconductors[SC].c_auger_n; // [nm^6/s]
+        //c_auger_p:=Semiconductors[SC].c_auger_p; // [nm^6/s]
+        //r_auger:=(c_auger_n*n+c_auger_p*p)*(n*p-ni*ni);
+
+        result:= r_radiative+r_srh+r_auger;
+      end;
+
+      // Derivation of the Generation/Recombination rate at integer position x,y,z
+      // with respect to the electron concentration n. This derivative
+      // is needed by the iteration scheme (Newton SOR).
+      // Result is given in [1/s].
+      function d_Rate_dn(SC:integer;aphi,n,p:double):double;
+      var ni,f:double;
+          r_radiative,r_auger,r_srh:double;
+          tau_p,tau_n:double;
+          c_auger_n,c_auger_p:double;
+      begin
+        ni:=sqrt(Semiconductors[SC].n0*Semiconductors[SC].p0);
+
+        // Optical generation/recombination
+        r_radiative:=Semiconductors[SC].C_Rate*p;
+
+        // Shockley-Read-Hall recombination (uncomment the next 7 lines for SRH recombination)
+        r_srh:=0;
+        //tau_p:=Semiconductors[SC].tau_p;
+        //tau_n:=Semiconductors[SC].tau_n;
+        //f:= power(p*tau_n+ni*(tau_p+tau_n)+tau_p*n,2);
+        //if abs(f)>0 then
+        //  r_srh:=(p+ni)*(p*tau_n+ni*tau_p)/f
+        //else
+        //  r_srh:=0;
+
+        //Auger recombination (uncomment the next 3 lines for Auger recombination)
+        r_auger:=0;
+        //c_auger_n:=Semiconductors[SC].c_auger_n; // [nm^6/s]
+        //c_auger_p:=Semiconductors[SC].c_auger_p; // [nm^6/s]
+        //r_auger:= c_auger_n*(2*p*n+ni*ni)+c_auger_p*p*p;
+
+        result:= r_radiative+r_srh+r_auger;
+      end;
+
+      // Derivation of the Generation/Recombination rate at integer position x,y,z
+      // with respect to the hole concentration p. This derivative
+      // is needed by the iteration scheme (Newton SOR).
+      // Result is given in [1/s].
+      function d_Rate_dp(SC:integer;aphi,n,p:double):double;
+      var ni,f:double;
+          r_radiative,r_auger,r_srh:double;
+          tau_p,tau_n:double;
+          c_auger_n,c_auger_p:double;
+      begin
+        ni:=sqrt(Semiconductors[SC].n0*Semiconductors[SC].p0);
+
+        // Optical generation/recombination
+        r_radiative:=Semiconductors[SC].C_Rate*p;
+
+        // Shockley-Read-Hall recombination (uncomment the next 7 lines for SRH recombination
+        r_srh:=0;
+        //tau_p:=Semiconductors[SC].tau_p;
+        //tau_n:=Semiconductors[SC].tau_n;
+        //f:=power(n*tau_p+ni*(tau_p+tau_n)+tau_n*p,2);
+        //if abs(f)>0 then
+        //  r_srh:=(n+ni)*(n*tau_p+ni*tau_n)/f
+        //else
+        //  r_srh:=0;
+
+        //Auger recombination  (uncomment the next 3 lines for Auger recombination)
+        r_auger:=0;
+        //c_auger_n:=Semiconductors[SC].c_auger_n; // [nm^6/s]
+        //c_auger_p:=Semiconductors[SC].c_auger_p; // [nm^6/s]
+        //r_auger:= c_auger_p*(2*n*p+ni*ni)+c_auger_n*n*n;
+
+        result:= r_radiative+r_srh+r_auger;
+      end;
+
+
+      // Calculates the steady state carrier concentration (n*,p*) that is reached
+      // under constant and homogeneous illumination of the semiconductor. [1/nm³]
+      // Result is boolean and indicates success of the iteration
+      function Find_steady_state_concentrations(var n,p:double; SC_Index:integer):boolean;
+      var r1,r2,r_curr,c1,c2,c_curr:double;
+          i,iter_max:integer;
+      begin
+        c1:=-min(n,p);
+        c2:=10;
+       // c2:=max(n*1000,p*1000);
+        // In case of ND=NA, n and p can be very small, therefore we set c2, the
+        // limit of the search interval, to the maximum of n,p,NA,ND:
+        //c2:=max(c2,Semiconductors[SC_Index].N_A*1e-27);
+        //c2:=max(c2,Semiconductors[SC_Index].N_D*1e-27);
+        iter_max:=1000;
+        i:=0;
+        while (abs((c1-c2)/max(c1,c2))>1e-10) and (i<=iter_max) do
+           begin
+              inc(i);
+              c_curr:=(c1+c2)/2;
+              r_curr:= Rate(SC_Index,0,n+c_curr,p+c_curr);
+              r1:=Rate( SC_Index,0,n+c1,p+c1);
+              r2:=Rate( SC_Index,0,n+c2,p+c2);
+              if sign(r1)=sign(r2) then break;
+              if sign(r_curr)=sign(r1) then
+                   c1:=c_curr
+              else
+                   c2:=c_curr;
+           end;
+        result:=(abs((c1-c2)/max(c1,c2))<1e-10);
+        if result then
+          begin
+            c_curr:=(c1+c2)/2;
+            n:=n+c_curr;
+            p:=p+c_curr;
+            output(format('Steady state concentration of excited carriers (semiconductor %d) = %.5e nm^-3',[SC_Index, c_curr]));
+          end
+        else
+          output('\n*** WARNING: Could not determine steady state concentration of excited carriers.'+
+                 ' E_F instead of E_Fqn / E_Fqp will be used in first step!\n');
+      end;
+
+
+
+
 
 
 end.

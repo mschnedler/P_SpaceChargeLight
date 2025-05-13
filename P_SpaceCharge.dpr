@@ -23,7 +23,7 @@ type
        TGridPointArray=array of double;
 var
        // Definition of variables:
-       PhiScale_tip:                          double;
+       //PhiScale_tip:                          double;
 
        Voltage:                               double;   // current tip-sample voltage step
        Parameterlist: array of string;                  // Paremeters read from parameter input file
@@ -576,11 +576,10 @@ var
       // alpha:  tip apex angle
       // d:      tip-sample distance
       function Tip(x,y:double; r, alpha, d:double):double;
-      var e,a,b:double;
+      var a,b:double;
       begin
         b:=r/tan(alpha/360*2*Pi);
         a:=b*b/r;
-        e:=sqrt(a*a+b*b);
         result:=a*sqrt( 1+ (x*x+y*y)/(b*b));
         result:=result-a+d;
       end;
@@ -634,11 +633,11 @@ var
           pz_start_min:double;
       begin
          pz_start_min:=10000;
-         Phi_tip:=-(Voltage+Semiconductors[0].E_F-Semiconductors[0].E_g+(Phi_m-Semiconductors[0].Chi));
+         Phi_tip:= -(Voltage+Semiconductors[0].E_F-Semiconductors[0].E_g+(Phi_m-Semiconductors[0].Chi));
 
          output(format('\nPhi_tip = %.5e V',[-Phi_tip]));
 
-         PhiScale_tip:=1/abs(Phi_tip);
+         //PhiScale_tip:=1/abs(Phi_tip);
          for y := 0 to NodeCount_y-1 do
            for x := 0 to NodeCount_x-1 do
               begin
@@ -661,7 +660,11 @@ var
                      if z>=NodeCount_z div 2 then
                        begin
                          SC:=GetSemiconductorAtPosition(x);
-                         AssignSC(x,y,z,SC)
+                         //Ohmic backcontact, important for light simulations,
+                         //otherwise comment out the following three lines:
+                         AssignSC(x,y,z,SC);
+                         //if z=NodeCount_z-1 then
+                         //   AssignOhmic(x,y,z,SC,0);
                        end
                      else
                        AssignVacuum(x,y,z);
@@ -1348,7 +1351,7 @@ var
         SCbelowTip:integer;
 
 begin
-
+        System.math.SetExceptionMask( GetExceptionMask - [exZeroDivide, exOverflow, exInvalidOp]);
         try
           output('Welcome to P_SpaceCharge!\n');
           output('=========================================================');

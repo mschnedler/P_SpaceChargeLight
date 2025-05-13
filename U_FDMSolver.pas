@@ -28,7 +28,7 @@ uses
        SysUtils;
 
 const
-       FDMSolver_Version = '4 (06/28/2024)';
+       FDMSolver_Version = '5 (10/18/2024)';
 
 type
        TGridPointArray=array of double;
@@ -85,8 +85,6 @@ var
        //          4. Manually set SpaceChargeArray values
 
 implementation
-
-
 
      // Derivation of Diffusion coefficient for electrons under impurity
      // scattering, carrier-carrier scattering, and velocity saturation.
@@ -307,6 +305,7 @@ implementation
       procedure Initialize_Semiconductors;
       var i           :integer;
           c           :double;
+          n_ex,p_ex   :double;
           n_max,p_max,phi_max:double;
       begin
           kT:=k*T;
@@ -351,6 +350,21 @@ implementation
                   nref_p:=3e17*1e-21; // [nm^-3] reference doping concentration
                   tau_p:=tau_p0/(1+(N_D+N_A)*1e-27/nref_p);
                   tau_n:=tau_n0/(1+(N_D+N_A)*1e-27/nref_n);
+
+                  E_fqn_steady:=E_F;
+                  E_fqp_steady:=E_F;
+                  if light_on then
+                   begin
+                    n_ex:=n0;
+                    p_ex:=p0;
+                    if Find_Steady_State_concentrations(n_ex,p_ex,i) then
+                      begin
+                        E_fqn_steady:=GetE_Fqn2(i,0,n_ex);
+                        E_fqp_steady:=GetE_Fqp2(i,0,p_ex);
+                        output(format('Quasi Fermi level (Electrons) of semiconductor %d = %.5e eV',[i, E_fqn_steady]));
+                        output(format('Quasi Fermi level (Holes) of semiconductor %d = %.5e eV',[i, E_fqp_steady]));
+                      end;
+                   end;
 
                   C_Poisson:=e/(Epsi_0*Epsi_s)*1e9;
                   Epsi_semi :=Epsi_0*Epsi_s*1e-9;
@@ -1102,18 +1116,11 @@ implementation
       function dF1_dPhi(x,y,z:integer;aPhi,n,p:double):double;
       var px,py,pz:double;
           pxp1,pyp1,pzp1,pxm1,pym1,pzm1:double;
-          drho2,drho:double;
+          drho:double;
           PartX,PartY,PartZ:double;
-          SC,SC1:integer;
+          SC:integer;
           E_offset:double;
-          Epsi1,Epsi2:double;
-          Phi_quasi:double;
-          SurfX,SurfY,SurfZ,IntX,IntY,IntZ:boolean;
           SurfCount,IntCount:integer;
-          Cfrac:double;
-          IShift:integer;
-          dQ_int_dPhi:double;
-          dQ_surf_dPhi:double;
       begin
         SC:=SpaceChargeArray[x,y,z].SCIndex;
         E_offset:=Semiconductors[SC].E_offset;
@@ -1220,108 +1227,6 @@ implementation
           result :=x/(exp(x)-1);
       end;
 
-      // Generation/Recombination rate at the integer position x,y,z,
-      // including the generation of light excited carriers G_Photo.
-      // Result is given in [1/(nm^3*s)].
-      function Rate(x,y,z:integer;aPhi,n,p:double):double;
-      var SC:integer;
-          ni,f:double;
-          r_radiative,r_auger,r_srh:double;
-          tau_p,tau_n:double;
-          c_auger_n,c_auger_p:double;
-      begin
-        SC:=SpaceChargeArray[x,y,z].SCIndex;
-        ni:=sqrt(Semiconductors[SC].n0*Semiconductors[SC].p0);
-
-        // Optical generation/recombination
-        r_radiative:= Semiconductors[SC].C_Rate*(n*p-ni*ni)
-                     -Semiconductors[SC].G_Photo;
-
-        // Shockley-Read-Hall recombination
-        tau_p:=Semiconductors[SC].tau_p;
-        tau_n:=Semiconductors[SC].tau_n;
-        f:= (tau_p*(n+ni)+tau_n*(p+ni));
-        if abs(f)>0 then
-          r_srh:=(n*p-ni*ni)/f
-        else
-          r_srh:=0;
-
-        // Auger recombination
-        c_auger_n:=Semiconductors[SC].c_auger_n; // [nm^6/s]
-        c_auger_p:=Semiconductors[SC].c_auger_p; // [nm^6/s]
-
-        r_auger:=(c_auger_n*n+c_auger_p*p)*(n*p-ni*ni);
-
-        result:= r_radiative+r_srh+r_auger;
-      end;
-
-      // Derivation of the Generation/Recombination rate at integer position x,y,z
-      // with respect to the electron concentration n. This derivative
-      // is needed by the iteration scheme (Newton SOR).
-      // Result is given in [1/s].
-      function d_Rate_dn(x,y,z:integer;aphi,n,p:double):double;
-      var SC:integer;
-          ni,f:double;
-          r_radiative,r_auger,r_srh:double;
-          tau_p,tau_n:double;
-          c_auger_n,c_auger_p:double;
-      begin
-        SC:=SpaceChargeArray[x,y,z].SCIndex;
-        ni:=sqrt(Semiconductors[SC].n0*Semiconductors[SC].p0);
-
-        // Optical generation/recombination
-        r_radiative:=Semiconductors[SC].C_Rate*p;
-
-        // Shockley-Read-Hall recombination
-        tau_p:=Semiconductors[SC].tau_p;
-        tau_n:=Semiconductors[SC].tau_n;
-        f:= power(p*tau_n+ni*(tau_p+tau_n)+tau_p*n,2);
-        if abs(f)>0 then
-          r_srh:=(p+ni)*(p*tau_n+ni*tau_p)/f
-        else
-          r_srh:=0;
-
-        //Auger recombination
-        c_auger_n:=Semiconductors[SC].c_auger_n; // [nm^6/s]
-        c_auger_p:=Semiconductors[SC].c_auger_p; // [nm^6/s]
-        r_auger:= c_auger_n*(2*p*n+ni*ni)+c_auger_p*p*p;
-
-        result:= r_radiative+r_srh+r_auger;
-      end;
-
-      // Derivation of the Generation/Recombination rate at integer position x,y,z
-      // with respect to the hole concentration p. This derivative
-      // is needed by the iteration scheme (Newton SOR).
-      // Result is given in [1/s].
-      function d_Rate_dp(x,y,z:integer;aphi,n,p:double):double;
-      var SC:integer;
-          ni,f:double;
-          r_radiative,r_auger,r_srh:double;
-          tau_p,tau_n:double;
-          c_auger_n,c_auger_p:double;
-      begin
-        SC:=SpaceChargeArray[x,y,z].SCIndex;
-        ni:=sqrt(Semiconductors[SC].n0*Semiconductors[SC].p0);
-
-        // Optical generation/recombination
-        r_radiative:=Semiconductors[SC].C_Rate*p;
-
-        // Shockley-Read-Hall recombination
-        tau_p:=Semiconductors[SC].tau_p;
-        tau_n:=Semiconductors[SC].tau_n;
-        f:=power(n*tau_p+ni*(tau_p+tau_n)+tau_n*p,2);
-        if abs(f)>0 then
-          r_srh:=(n+ni)*(n*tau_p+ni*tau_n)/f
-        else
-          r_srh:=0;
-
-        //Auger recombination
-        c_auger_n:=Semiconductors[SC].c_auger_n; // [nm^6/s]
-        c_auger_p:=Semiconductors[SC].c_auger_p; // [nm^6/s]
-        r_auger:= c_auger_p*(2*n*p+ni*ni)+c_auger_n*n*n;
-
-        result:= r_radiative+r_srh+r_auger;
-      end;
 
       // Continuity equation for electrons such, that F2(Phi,n,p) = 0,
       // in analogy to [2].
@@ -1461,7 +1366,7 @@ implementation
                           )/((pz-pzm1)*(pzp1-pzm1)* 0.5 );
              end;
 
-        result:= Semiconductors[SC].Dn*(PartX + PartY + PartZ) - Rate(x,y,z,aPhi,n,p);
+        result:= Semiconductors[SC].Dn*(PartX + PartY + PartZ) - Rate(SC,aPhi,n,p);
 
 
       end;
@@ -1578,7 +1483,7 @@ implementation
                           )/((pz-pzm1)*(pzp1-pzm1)* 0.5 );
              end;
 
-        result:= Semiconductors[SC].Dn*(PartX + PartY + PartZ)-d_Rate_dn(x,y,z,aPhi,n,p);
+        result:= Semiconductors[SC].Dn*(PartX + PartY + PartZ)-d_Rate_dn(SC,aPhi,n,p);
 
       end;
 
@@ -1722,7 +1627,7 @@ implementation
                             )/((pz-pzm1)*(pzp1-pzm1)* 0.5 );
             end;
 
-         result:= Semiconductors[SC].Dp*(PartX + PartY + PartZ) - Rate(x,y,z,aPhi,n,p);
+         result:= Semiconductors[SC].Dp*(PartX + PartY + PartZ) - Rate(SC,aPhi,n,p);
 
       end;
 
@@ -1838,7 +1743,7 @@ implementation
                             )/((pz-pzm1)*(pzp1-pzm1)* 0.5 );
             end;
 
-         result:= Semiconductors[SC].Dp*(PartX + PartY + PartZ)- d_Rate_dp(x,y,z,aPhi,n,p);
+         result:= Semiconductors[SC].Dp*(PartX + PartY + PartZ)- d_Rate_dp(SC,aPhi,n,p);
       end;
 
 
@@ -1914,7 +1819,6 @@ implementation
             epsilon:double;
             Offset:double;
             PreCalc:boolean;
-            c_opt:double;
             d1,d2,d3:double;
             m_max:integer;
             d0:double;
@@ -1923,7 +1827,7 @@ implementation
 
       DetectSurfacesAndInterfaces;
       Prepare_Div_P;
-      PreCalc:=true;
+      PreCalc:=True;
       // Calculate the (Quasi)-Fermilevel under the assumption
       // of thermal equilibrium (i.e. use E_F for both electrons and holes):
       GetE_Fqn:=GetE_Fqn1;
@@ -2013,7 +1917,6 @@ implementation
                            and ((d2<=abs(dn_max*epsilon)) or (abs(dn_max)*NScale<1e-10))
                            and ((d3<=abs(dp_max*epsilon)) or (abs(dp_max)*NScale<1e-10));
 
-
               dw_k:=0;
               w_k:=0;
 
@@ -2038,8 +1941,8 @@ implementation
                             begin
                               if PreCalc then //Precalc (i.e. without Continuity equations)
                                 begin
-                                  SpaceChargeArray[x,y,z].n:=n(Semiconductors[SCIndex].E_f,SpaceChargeArray[x,y,z].Phi+Offset,Semiconductors[SCIndex].Inv_C,SCIndex);
-                                  SpaceChargeArray[x,y,z].p:=p(Semiconductors[SCIndex].E_f,SpaceChargeArray[x,y,z].Phi+Offset,Semiconductors[SCIndex].Inv_V,SCIndex);
+                                  SpaceChargeArray[x,y,z].n:=n(Semiconductors[SCIndex].E_fqn_steady,SpaceChargeArray[x,y,z].Phi+Offset,Semiconductors[SCIndex].Inv_C,SCIndex);
+                                  SpaceChargeArray[x,y,z].p:=p(Semiconductors[SCIndex].E_fqp_steady,SpaceChargeArray[x,y,z].Phi+Offset,Semiconductors[SCIndex].Inv_V,SCIndex);
                                 end
                               else
                                 begin // (with continuity equations)
@@ -2049,7 +1952,6 @@ implementation
                                   SpaceChargeArray[x,y,z].Phi_Gamma_P:=SpaceChargeArray[x,y,z].Phi_Gamma_P+0.1*omega*(Update_Phi_Gamma_p(x,y,z)-SpaceChargeArray[x,y,z].Phi_Gamma_P);
                                   //SpaceChargeArray[x,y,z].Phi_Gamma_N:=Update_Phi_Gamma_n(x,y,z);
                                   //SpaceChargeArray[x,y,z].Phi_Gamma_P:=Update_Phi_Gamma_p(x,y,z);
-
                                   dw_k:=dw_k+(abs(SpaceChargeArray[x,y,z].dn)+abs(SpaceChargeArray[x,y,z].dp))*Nscale;
                                   w_k:=w_k+(abs(SpaceChargeArray[x,y,z].n)+abs(SpaceChargeArray[x,y,z].p))*Nscale;
                                 end;
