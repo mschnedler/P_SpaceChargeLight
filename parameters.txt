@@ -1,4 +1,4 @@
-# Parameter file 
+# Parameter file  
 # Material: 2x10^18 p-doped GaAs, Messung: 20120718m21_2e18_Licht
 # 08/14/14
  
